@@ -1,5 +1,8 @@
 export type SizeClass = 'small' | 'medium' | 'large';
 
+/** Distance band from the player to the hit point; farther hits earn a bonus. */
+export type RangeZone = 'near' | 'medium' | 'far';
+
 export type TargetKind =
   | 'frankenstein'
   | 'witch'

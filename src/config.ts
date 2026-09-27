@@ -1,4 +1,4 @@
-import type { SizeClass, TargetKind } from './types';
+import type { RangeZone, SizeClass, TargetKind } from './types';
 
 /**
  * Central gameplay tuning. Everything a designer might want to tweak lives here so
@@ -38,6 +38,19 @@ export const CONFIG = {
     medium: 25,
     large: 10,
   } satisfies Record<SizeClass, number>,
+
+  /** Flat base points for specific target types, replacing the size-class value. */
+  kindPoints: {
+    witch: 75,
+    candyCorn: 100,
+  } satisfies Partial<Record<TargetKind, number>>,
+
+  /** Range bonus by distance (m) from the player's eye to the hit point. */
+  range: {
+    mediumFromM: 12,
+    farFromM: 18,
+    bonus: { near: 0, medium: 5, far: 10 } satisfies Record<RangeZone, number>,
+  },
 
   /** Default size class per target type. Spiders may roll a rarer medium "big spider". */
   defaultSize: {

@@ -23,7 +23,7 @@ Last full run: 2026-09-26, on the final code in this folder.
 
 ### Unit and simulation tests (`tests/`)
 
-- **run.test.ts**: size-based points (small 50 / medium 25 / large 10, by class not distance);
+- **run.test.ts**: size-based points (small 50 / medium 25 / large 10; witch 75, candy corn 100) plus range bonus (near +0 / medium +5 / far +10);
   one score + one candy per hit, only while playing; 3 s countdown then exactly 60 s of play;
   pause/resume consumes no time; heart loss plus immunity against overlapping impacts; last
   heart ends the run; **final heart beats timeout in the same step**; no damage outside play;
@@ -120,7 +120,7 @@ launcher (lower right), the candy bag (lower left) and the touch FIRE button all
 
 1. `npm run build && npm run serve:lan` on the host; note the printed `Local network` URL.
 2. On a desktop browser: Start, confirm the mouse is captured, and shoot a Frankenstein (10), witch
-   (25), spider (50), candy corn (50) and sucker (25). Watch each matching candy fly into the bag.
+   (75), spider (50), candy corn (100) and sucker (25), each +5 at medium range or +10 far. Watch each matching candy fly into the bag.
 3. Let a spider throw; shoot one jack-o'-lantern (pumpkin candy) and let one hit (a heart is lost
    and the screen shakes). Press Esc: it pauses and the timer holds. Resume.
 4. Finish the level: check the results totals, Replay (the total returns to the level-start value), then Next Level.

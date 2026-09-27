@@ -3,7 +3,7 @@ import { CONFIG } from '../config';
 import { segmentAabb, segmentGround, segmentSphere } from '../core/collision';
 import type { LevelParams } from '../core/difficulty';
 import type { Rng } from '../core/rng';
-import type { RunModel } from '../core/run';
+import { rangeZone, type RunModel } from '../core/run';
 import type { EnvironmentLayout } from '../render/environments/common';
 import { materials } from '../render/materials';
 import type { ModelLibrary } from '../render/models/characters';
@@ -270,7 +270,8 @@ export class World {
 
   private registerHit(target: Target, point: THREE.Vector3): void {
     target.hit();
-    const points = this.run ? this.run.awardHit(target.kind, target.size) : 0;
+    const zone = rangeZone(point.distanceTo(this.eye));
+    const points = this.run ? this.run.awardHit(target.kind, target.size, zone) : 0;
     this.events.targetHit?.(target, point, points);
   }
 

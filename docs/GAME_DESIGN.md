@@ -19,8 +19,10 @@ _This document describes the delivered build. Every number below comes from `src
   (48 m/s). Each one hits the **first** thing along its swept path (target, solid scenery, or
   ground) and disappears. Sub-stepped swept-sphere collision prevents tunnelling at low frame
   rates. There is no splash damage; explosions are cosmetic.
-- **Points are by explicit size class**, never by distance: small **50**, medium **25**,
-  large **10**.
+- **Base points are by explicit size class**: small **50**, medium **25**, large **10**, except
+  **witches (75)** and **candy corn (100)**, which have their own values.
+- **Range bonus** per hit, by distance from the player to the hit point: near (under 12 m) **+0**,
+  medium (12–18 m) **+5**, far (18 m and beyond) **+10**.
 
 | Target | Size | Behaviour | Candy it drops |
 | --- | --- | --- | --- |

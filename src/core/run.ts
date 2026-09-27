@@ -1,5 +1,5 @@
 import { CONFIG, type GameConfig } from '../config';
-import { CANDY_FOR_TARGET, type Bests, type Inventory, type Phase, type SizeClass, type TargetKind } from '../types';
+import { CANDY_FOR_TARGET, type Bests, type Inventory, type Phase, type RangeZone, type SizeClass, type TargetKind } from '../types';
 import { addInventories, cloneInventory, emptyInventory } from './inventory';
 
 export interface Snapshot {
@@ -9,8 +9,16 @@ export interface Snapshot {
 
 export type StepOutcome = 'none' | 'started' | 'levelComplete' | 'gameOver';
 
-export function pointsFor(size: SizeClass, cfg: GameConfig = CONFIG): number {
-  return cfg.points[size];
+export function rangeZone(distance: number, cfg: GameConfig = CONFIG): RangeZone {
+  if (distance >= cfg.range.farFromM) return 'far';
+  if (distance >= cfg.range.mediumFromM) return 'medium';
+  return 'near';
+}
+
+/** Base points (per-type override, else size class) plus the range bonus. */
+export function pointsFor(kind: TargetKind, size: SizeClass, zone: RangeZone = 'near', cfg: GameConfig = CONFIG): number {
+  const kindPoints: Partial<Record<TargetKind, number>> = cfg.kindPoints;
+  return (kindPoints[kind] ?? cfg.points[size]) + cfg.range.bonus[zone];
 }
 
 /**
@@ -118,9 +126,9 @@ export class RunModel {
   }
 
   /** Award points + candy for a successful hit. Returns points awarded (0 if not playing). */
-  awardHit(kind: TargetKind, size: SizeClass): number {
+  awardHit(kind: TargetKind, size: SizeClass, zone: RangeZone = 'near'): number {
     if (!this.acceptsCombat) return 0;
-    const pts = pointsFor(size, this.cfg);
+    const pts = pointsFor(kind, size, zone, this.cfg);
     this.levelScore += pts;
     this.levelInventory[CANDY_FOR_TARGET[kind]] += 1;
     return pts;

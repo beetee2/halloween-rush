@@ -10,6 +10,11 @@ export type Sfx =
   | 'scenery'
   | 'candy'
   | 'cackle'
+  | 'frankenstein'
+  | 'spider'
+  | 'pumpkin'
+  | 'candyCorn'
+  | 'sucker'
   | 'hiss'
   | 'throw'
   | 'hurt'
@@ -34,7 +39,11 @@ interface ToneOpts {
   pan?: number;
   filter?: { type: BiquadFilterType; freq: number; q?: number };
   vibrato?: { rate: number; depth: number };
+  /** Volume wobble (depth 0–1); a fast one gives a raspy, growly voice. */
+  tremolo?: { rate: number; depth: number };
   bus?: 'sfx' | 'music';
+  /** Also send through the echo bus (spooky trailing repeats). */
+  echo?: boolean;
 }
 
 export class AudioEngine {
@@ -42,6 +51,7 @@ export class AudioEngine {
   private master: GainNode | null = null;
   private sfx: GainNode | null = null;
   private music: GainNode | null = null;
+  private echo: GainNode | null = null;
   private noise: AudioBuffer | null = null;
   private volume = 0.8;
   private muted = false;
@@ -69,6 +79,18 @@ export class AudioEngine {
         this.music = this.ctx.createGain();
         this.music.gain.value = 0.28;
         this.music.connect(this.master);
+        // Echo bus: feedback delay with darkening repeats, feeding the sfx bus.
+        this.echo = this.ctx.createGain();
+        const delay = this.ctx.createDelay(1);
+        delay.delayTime.value = 0.27;
+        const fb = this.ctx.createGain();
+        fb.gain.value = 0.5;
+        const dark = this.ctx.createBiquadFilter();
+        dark.type = 'lowpass';
+        dark.frequency.value = 1800;
+        this.echo.connect(delay);
+        delay.connect(dark).connect(fb).connect(delay);
+        dark.connect(this.sfx);
         const len = this.ctx.sampleRate;
         this.noise = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
         const d = this.noise.getChannelData(0);
@@ -139,13 +161,27 @@ export class AudioEngine {
       node.connect(f);
       node = f;
     }
+    if (o.tremolo) {
+      const trem = ctx.createGain();
+      trem.gain.value = 1 - o.tremolo.depth;
+      const lfo = ctx.createOscillator();
+      const lg = ctx.createGain();
+      lfo.frequency.value = o.tremolo.rate;
+      lg.gain.value = o.tremolo.depth;
+      lfo.connect(lg).connect(trem.gain);
+      lfo.start(t);
+      lfo.stop(t + o.dur + 0.05);
+      node.connect(trem);
+      node = trem;
+    }
     node.connect(g);
     this.route(g, o.pan, o.bus);
+    if (o.echo && this.echo) g.connect(this.echo);
     osc.start(t);
     osc.stop(t + o.dur + 0.05);
   }
 
-  private noiseBurst(dur: number, gain: number, type: BiquadFilterType, f0: number, f1: number, q = 1, at = 0, pan?: number): void {
+  private noiseBurst(dur: number, gain: number, type: BiquadFilterType, f0: number, f1: number, q = 1, at = 0, pan?: number, echo = false): void {
     const ctx = this.ctx;
     if (!ctx || !this.noise) return;
     const t = ctx.currentTime + at;
@@ -162,6 +198,7 @@ export class AudioEngine {
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     src.connect(f).connect(g);
     this.route(g, pan);
+    if (echo && this.echo) g.connect(this.echo);
     src.start(t, Math.random() * 0.5);
     src.stop(t + dur + 0.05);
   }
@@ -203,15 +240,58 @@ export class AudioEngine {
         break;
       }
       case 'cackle': {
-        const pitches = [760, 820, 790, 850, 800, 900, 700];
-        pitches.forEach((p, i) => {
-          const at = i * 0.105 + (i === pitches.length - 1 ? 0.04 : 0);
-          const dur = i === pitches.length - 1 ? 0.42 : 0.09;
-          this.tone({ type: 'sawtooth', f0: p * r, f1: p * r * 0.72, dur, gain: 0.2, at, attack: 0.01, filter: { type: 'bandpass', freq: 1500, q: 3 }, vibrato: { rate: 28, depth: 40 }, pan });
-          this.noiseBurst(dur * 0.7, 0.05, 'highpass', 3000, 4000, 1, at, pan);
-        });
+        // "Ah-ha-ha-ha-ha… hee-hee-HEEE!" — quick nasal syllables, each with a breathy
+        // "h", voiced through two formant filters, echoing away at the end.
+        const syllables = [
+          ...[880, 840, 800, 770, 740, 700].map((f) => ({ f, dur: 0.08, gap: 0.1 })),
+          ...[1050, 1100].map((f) => ({ f, dur: 0.08, gap: 0.1 })),
+          { f: 1250, dur: 0.55, gap: 0 },
+        ];
+        let at = 0;
+        for (const { f, dur, gap } of syllables) {
+          const long = dur > 0.2;
+          const f0 = f * r;
+          const f1 = long ? f0 * 0.6 : f0 * 0.8;
+          const vibrato = long ? { rate: 11, depth: 60 } : { rate: 32, depth: 30 };
+          this.noiseBurst(0.035, 0.12, 'bandpass', 2400, 2000, 2, at, pan);
+          this.tone({ type: 'sawtooth', f0, f1, dur, gain: 0.2, at: at + 0.015, attack: 0.008, filter: { type: 'bandpass', freq: 1300, q: 5 }, vibrato, pan, echo: true });
+          this.tone({ type: 'sawtooth', f0, f1, dur, gain: 0.12, at: at + 0.015, attack: 0.008, filter: { type: 'bandpass', freq: 2700, q: 6 }, vibrato, pan, echo: true });
+          at += gap;
+        }
         break;
       }
+      case 'frankenstein':
+        // Zombie groan: "uuuhhh… rrrgh" — a low raspy voice through an "uh" vowel,
+        // sagging then heaving up, with ragged breath underneath.
+        for (const [freq, q, gain] of [[500, 4, 0.34], [950, 6, 0.16]] as const) {
+          this.tone({ type: 'sawtooth', f0: 105 * r, f1: 78 * r, dur: 0.85, gain, attack: 0.18, filter: { type: 'bandpass', freq, q }, tremolo: { rate: 23, depth: 0.7 }, vibrato: { rate: 5, depth: 4 }, pan });
+          this.tone({ type: 'sawtooth', f0: 82 * r, f1: 118 * r, dur: 0.7, gain, at: 0.75, attack: 0.1, filter: { type: 'bandpass', freq: freq * 0.9, q }, tremolo: { rate: 31, depth: 0.8 }, pan });
+        }
+        this.tone({ type: 'sine', f0: 55, f1: 45, dur: 1.4, gain: 0.18, attack: 0.2, pan });
+        this.noiseBurst(1.4, 0.07, 'bandpass', 700, 400, 3, 0.05, pan);
+        break;
+      case 'spider':
+        // Quick skittering leg clicks.
+        for (let i = 0; i < 7; i++) {
+          this.noiseBurst(0.03, 0.22, 'bandpass', 4200 * r, 3000, 12, i * 0.045 + Math.random() * 0.015, pan);
+        }
+        this.tone({ type: 'triangle', f0: 1900 * r, f1: 1500, dur: 0.08, gain: 0.05, at: 0.3, pan });
+        break;
+      case 'pumpkin':
+        // Hollow gourd "bonk" followed by a descending incoming whistle.
+        this.tone({ type: 'sine', f0: 240 * r, f1: 160, dur: 0.22, gain: 0.35, filter: { type: 'bandpass', freq: 300, q: 5 }, pan });
+        this.tone({ type: 'sine', f0: 1500, f1: 700, dur: 0.6, gain: 0.07, at: 0.12, vibrato: { rate: 10, depth: 20 }, pan });
+        break;
+      case 'candyCorn':
+        // Bright sparkly pop.
+        this.tone({ type: 'sine', f0: 900 * r, f1: 1800, dur: 0.08, gain: 0.14, pan });
+        [2093, 2637, 3136].forEach((f, i) => this.tone({ type: 'triangle', f0: f * r, dur: 0.1, gain: 0.06, at: 0.06 + i * 0.05, pan }));
+        break;
+      case 'sucker':
+        // Springy "boing" with a wobble.
+        this.tone({ type: 'sine', f0: 300 * r, f1: 620, dur: 0.35, gain: 0.2, vibrato: { rate: 16, depth: 60 }, pan });
+        this.tone({ type: 'triangle', f0: 600 * r, f1: 1240, dur: 0.3, gain: 0.06, at: 0.02, pan });
+        break;
       case 'hiss':
         this.noiseBurst(0.55, 0.16, 'highpass', 2500, 6000, 1, 0, pan);
         this.tone({ type: 'square', f0: 300, f1: 900, dur: 0.5, gain: 0.05, filter: { type: 'lowpass', freq: 1800 }, pan });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CONFIG } from '../src/config';
-import { RunModel, pointsFor } from '../src/core/run';
+import { RunModel, pointsFor, rangeZone } from '../src/core/run';
 
 const STEP = 1 / 60;
 
@@ -30,12 +30,30 @@ function completeLevel(run: RunModel, hits: Array<Parameters<RunModel['awardHit'
 
 describe('scoring', () => {
   it('awards more points to smaller size classes', () => {
-    expect(pointsFor('large')).toBe(10);
-    expect(pointsFor('medium')).toBe(25);
-    expect(pointsFor('small')).toBe(50);
+    expect(pointsFor('frankenstein', 'large')).toBe(10);
+    expect(pointsFor('sucker', 'medium')).toBe(25);
+    expect(pointsFor('spider', 'small')).toBe(50);
+    expect(pointsFor('spider', 'medium')).toBe(25); // big spider
   });
 
-  it('uses explicit size classes per target type (not distance)', () => {
+  it('gives witches and candy corn their own base points', () => {
+    expect(pointsFor('witch', 'medium')).toBe(75);
+    expect(pointsFor('candyCorn', 'small')).toBe(100);
+  });
+
+  it('adds a per-hit range bonus: near +0, medium +5, far +10', () => {
+    expect(rangeZone(0)).toBe('near');
+    expect(rangeZone(11.9)).toBe('near');
+    expect(rangeZone(12)).toBe('medium');
+    expect(rangeZone(17.9)).toBe('medium');
+    expect(rangeZone(18)).toBe('far');
+    expect(pointsFor('frankenstein', 'large', 'medium')).toBe(15);
+    expect(pointsFor('frankenstein', 'large', 'far')).toBe(20);
+    expect(pointsFor('witch', 'medium', 'far')).toBe(85);
+    expect(pointsFor('candyCorn', 'small', 'medium')).toBe(105);
+  });
+
+  it('uses explicit size classes per target type', () => {
     expect(CONFIG.defaultSize.frankenstein).toBe('large');
     expect(CONFIG.defaultSize.witch).toBe('medium');
     expect(CONFIG.defaultSize.spider).toBe('small');
@@ -167,7 +185,7 @@ describe('checkpoints: replay, next level, new run', () => {
     run.sceneReady();
     finishCountdown(run);
     completeLevel(run, [['witch', 'medium']]);
-    expect(run.totalScore).toBe(85);
+    expect(run.totalScore).toBe(135);
     expect(run.totalInventory.witch).toBe(1);
 
     // Replay level 2 three times with different results.
@@ -213,8 +231,8 @@ describe('checkpoints: replay, next level, new run', () => {
       playFor(run, CONFIG.level.damageImmunitySec + 0.05);
     }
     expect(run.phase).toBe('gameOver');
-    expect(run.totalScore).toBe(75);
-    expect(run.bests.bestRunScore).toBe(75);
+    expect(run.totalScore).toBe(125);
+    expect(run.bests.bestRunScore).toBe(125);
   });
 
   it('a new run clears score and candy but keeps personal bests', () => {

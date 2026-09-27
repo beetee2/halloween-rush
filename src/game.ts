@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { AudioEngine } from './audio/audio';
+import type { AudioEngine, Sfx } from './audio/audio';
 import { CONFIG } from './config';
 import { levelParams } from './core/difficulty';
 import { FireControl } from './core/fireControl';
@@ -18,9 +18,19 @@ import { ModelLibrary } from './render/models/characters';
 import { Stage } from './render/stage';
 import { IncomingPumpkin, SpiderTarget, type Target } from './sim/targets';
 import { World } from './sim/world';
-import { CANDY_FOR_TARGET, type ScoreEntry, type Settings } from './types';
+import { CANDY_FOR_TARGET, type ScoreEntry, type Settings, type TargetKind } from './types';
 import type { BoardsView } from './ui/boards';
 import type { UI } from './ui/ui';
+
+/** Sound played when each kind of shootable target appears. */
+const SPAWN_SFX: Readonly<Record<TargetKind, Sfx>> = {
+  frankenstein: 'frankenstein',
+  witch: 'cackle',
+  spider: 'spider',
+  incomingPumpkin: 'pumpkin',
+  candyCorn: 'candyCorn',
+  sucker: 'sucker',
+};
 
 export interface GameOptions {
   canvas: HTMLCanvasElement;
@@ -114,10 +124,11 @@ export class Game {
       },
       playerHit: (damaged) => this.onPlayerHit(damaged),
       spiderPrepare: (s) => this.audio.play('hiss', this.pan(s.position)),
-      spiderThrow: (from) => this.audio.play('throw', this.pan(from)),
-      targetSpawned: (t) => {
-        if (t.kind === 'witch') this.audio.play('cackle', this.pan(t.position));
+      spiderThrow: (from) => {
+        this.audio.play('throw', this.pan(from));
+        this.audio.play('pumpkin', this.pan(from));
       },
+      targetSpawned: (t) => this.audio.play(SPAWN_SFX[t.kind], this.pan(t.position)),
     });
     this.stage.scene.add(this.world.root, this.effects.mesh);
 
