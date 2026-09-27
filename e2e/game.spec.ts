@@ -1,5 +1,7 @@
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
+import { CONFIG } from '../src/config';
+import type { RangeZone } from '../src/types';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 declare global {
@@ -89,8 +91,14 @@ async function start(page: Page, tap = false): Promise<void> {
   await skipCountdown(page);
 }
 
-/** Spawn a floating sucker with spawning otherwise off, aim at it, and fire with Space. */
-async function shootSucker(page: Page): Promise<void> {
+type Hit = { kind: string; size: string; zone: RangeZone; points: number };
+
+/**
+ * Spawn a floating sucker with spawning otherwise off, aim at it, and fire with Space.
+ * Returns the points scored: medium-size base plus the range bonus for how far away the
+ * seeded candy spot put the hit, checked against the rules in CONFIG.
+ */
+async function shootSucker(page: Page): Promise<number> {
   const before = (await state(page)).levelScore;
   await page.evaluate(() => {
     window.__HR__.setSpawning(false);
@@ -100,7 +108,13 @@ async function shootSucker(page: Page): Promise<void> {
   await page.evaluate(() => window.__HR__.advance(1.2));
   await page.evaluate((i) => window.__HR__.aimAt(i), id);
   await page.keyboard.press('Space');
-  await expect.poll(async () => (await state(page)).levelScore, { timeout: 15_000 }).toBe(before + 25);
+  await expect.poll(async () => (await state(page)).levelScore, { timeout: 15_000 }).toBeGreaterThan(before);
+  const hit: Hit = await page.evaluate(() => window.__HR__.lastHit());
+  expect(hit).toMatchObject({ kind: 'sucker', size: 'medium' });
+  const points = CONFIG.points.medium + CONFIG.range.bonus[hit.zone];
+  expect(hit.points).toBe(points);
+  expect((await state(page)).levelScore).toBe(before + points);
+  return points;
 }
 
 /**
@@ -151,16 +165,16 @@ test('level flow: shoot, candy into the bag, results, replay snapshot, next leve
   await page.mouse.up();
   await expect.poll(async () => (await state(page)).shots).toBe(1);
 
-  // Level 1: hit a sucker → 25 points and a sucker candy flies into the bag.
+  // Level 1: hit a sucker → 25 points plus its range bonus, and a sucker candy flies into the bag.
   await page.waitForTimeout(500); // fire cooldown
-  await shootSucker(page);
+  const level1 = await shootSucker(page);
   s = await state(page);
   expect(s.inventory.sucker).toBe(1);
   await expect.poll(async () => (await state(page)).bagVisible, { timeout: 10_000 }).toBe(1);
-  await expect(page.locator('#hud-total')).toHaveText('25');
+  await expect(page.locator('#hud-total')).toHaveText(String(level1));
   await finishLevel(page);
-  await expect(page.locator('#results-level')).toHaveText('25');
-  await expect(page.locator('#results-total')).toHaveText('25');
+  await expect(page.locator('#results-level')).toHaveText(String(level1));
+  await expect(page.locator('#results-total')).toHaveText(String(level1));
   // Nobody has finished level 1 yet, so this is a level best: a name is asked for before
   // Replay/Next come back.
   await expect(page.locator('#results-entry')).toBeVisible();
@@ -179,11 +193,11 @@ test('level flow: shoot, candy into the bag, results, replay snapshot, next leve
   expect(s.env).toBe('Graveyard');
   expect(s.levelIndex).toBe(1);
   expect(s.hearts).toBe(3);
-  expect(s.totalScore).toBe(25);
-  await shootSucker(page);
-  expect((await state(page)).totalScore).toBe(50);
+  expect(s.totalScore).toBe(level1);
+  const level2 = await shootSucker(page);
+  expect((await state(page)).totalScore).toBe(level1 + level2);
   await finishLevel(page);
-  await expect(page.locator('#results-total')).toHaveText('50');
+  await expect(page.locator('#results-total')).toHaveText(String(level1 + level2));
   // Another level best, but this run already has a name: no second question.
   await expect(page.locator('#results-levelbest')).toHaveText('New best for Level 2, Hudson!');
   await expect(page.locator('#results-entry')).toBeHidden();
@@ -194,23 +208,23 @@ test('level flow: shoot, candy into the bag, results, replay snapshot, next leve
     s = await state(page);
     expect(s.levelIndex).toBe(1);
     expect(s.env).toBe('Graveyard');
-    expect(s.totalScore).toBe(25);
+    expect(s.totalScore).toBe(level1);
     expect(s.inventory.sucker).toBe(1);
     expect(s.hearts).toBe(3);
     expect(s.time).toBeGreaterThan(59);
     await finishLevel(page);
-    await expect(page.locator('#results-total')).toHaveText('25');
+    await expect(page.locator('#results-total')).toHaveText(String(level1));
     await expect(page.locator('#results-levelbest')).toBeHidden();
   }
-  expect((await state(page)).bests.bestRunScore).toBe(50);
+  expect((await state(page)).bests.bestRunScore).toBe(level1 + level2);
   // The host recorded it the way the game counts it: the last replay of level 2 (0) replaced
-  // the 25, while both level bests stand.
+  // the first attempt's score, while both level bests stand.
   const boards = await hostBoards(page);
   expect(boards.levels.map((l) => [l.level, l.map, l.name, l.score])).toEqual([
-    [1, 'Haunted House', 'Hudson', 25],
-    [2, 'Graveyard', 'Hudson', 25],
+    [1, 'Haunted House', 'Hudson', level1],
+    [2, 'Graveyard', 'Hudson', level2],
   ]);
-  expect(boards.runs).toEqual([{ runId: (await state(page)).runId, name: 'Hudson', score: 25, level: 2 }]);
+  expect(boards.runs).toEqual([{ runId: (await state(page)).runId, name: 'Hudson', score: level1, level: 2 }]);
   expect(errors).toEqual([]);
 });
 
@@ -284,12 +298,12 @@ test('game over: name onto the scoreboard, career and level boards, new run rese
   await page.reload();
   await page.waitForFunction(() => !!window.__HR__);
   await start(page);
-  await shootSucker(page);
+  const scored = await shootSucker(page);
   await page.keyboard.down('Space'); // still holding fire when the run ends
   for (let i = 0; i < 3; i++) await page.evaluate(() => window.__HR__.hurt());
   await waitPhase(page, 'gameOver');
   await expect(page.locator('#screen-gameover')).toBeVisible();
-  await expect(page.locator('#gameover-total')).toHaveText('25');
+  await expect(page.locator('#gameover-total')).toHaveText(String(scored));
   await expect(page.locator('#gameover-newbest')).toBeVisible();
   // First on the empty scoreboard: the name box replaces Title/New Run until a name is saved.
   await expect(page.locator('#gameover-entry')).toBeVisible();
@@ -309,15 +323,15 @@ test('game over: name onto the scoreboard, career and level boards, new run rese
   await expect(page.locator('#btn-newrun')).toBeFocused();
   await expect(runs.locator('li')).toHaveCount(1);
   await expect(runs.locator('li.you')).toContainText('Hudson');
-  await expect(runs.locator('li.you')).toContainText('25');
+  await expect(runs.locator('li.you')).toContainText(String(scored));
   await expect(page.locator('#gameover-boards .boards-note')).toContainText('everyone on this network');
   await page.screenshot({ path: `${SHOTS}/desktop-gameover.png` });
   // Career (from the host): points over every game and the average per map.
   await page.click('#gameover-boards [role="tab"]:has-text("Career")');
   const career = page.locator('#gameover-boards ol[aria-label="Career"]');
   await expect(career).toContainText('Hudson');
-  await expect(career).toContainText('1 game · best 25 · Lv 1');
-  await expect(career).toContainText('Avg/map: House 25');
+  await expect(career).toContainText(`1 game · best ${scored} · Lv 1`);
+  await expect(career).toContainText(`Avg/map: House ${scored}`);
   await page.click('#gameover-boards [role="tab"]:has-text("Level bests")');
   await expect(page.locator('#gameover-boards ol[aria-label="Level bests"]')).toContainText('No levels finished yet.');
 
@@ -328,7 +342,7 @@ test('game over: name onto the scoreboard, career and level boards, new run rese
   expect(s.totalScore).toBe(0);
   expect(Object.values(s.inventory).reduce((a, b) => a + b, 0)).toBe(0);
   expect(s.hearts).toBe(3);
-  expect(s.bests.bestRunScore).toBe(25);
+  expect(s.bests.bestRunScore).toBe(scored);
   // A run that scores nothing doesn't ask for a name, but the scoreboard still shows.
   for (let i = 0; i < 3; i++) await page.evaluate(() => window.__HR__.hurt());
   await waitPhase(page, 'gameOver');
@@ -339,12 +353,12 @@ test('game over: name onto the scoreboard, career and level boards, new run rese
 
   // After a reload: the best run, and the household boards from the title screen.
   await page.reload();
-  await expect(page.locator('#title-bests')).toContainText('Best run: 25');
+  await expect(page.locator('#title-bests')).toContainText(`Best run: ${scored}`);
   await page.click('#btn-boards');
   await expect(page.locator('#screen-boards')).toBeVisible();
   await expect(page.locator('#title-boards ol[aria-label="Scoreboard"] li').first()).toContainText('Hudson');
   await page.click('#title-boards [role="tab"]:has-text("Career")');
-  await expect(page.locator('#title-boards ol[aria-label="Career"]')).toContainText('2 games · best 25');
+  await expect(page.locator('#title-boards ol[aria-label="Career"]')).toContainText(`2 games · best ${scored}`);
   await page.screenshot({ path: `${SHOTS}/desktop-leaderboards.png` });
   await page.click('#btn-boards-done');
   await expect(page.locator('#screen-title')).toBeVisible();
@@ -494,8 +508,8 @@ test('two browser contexts are independent sessions', async ({ browser }) => {
   await open(pb, 2);
   await start(pa);
   await start(pb);
-  await shootSucker(pa);
-  expect((await state(pa)).totalScore).toBe(25);
+  const scored = await shootSucker(pa);
+  expect((await state(pa)).totalScore).toBe(scored);
   expect((await state(pb)).totalScore).toBe(0);
   await pa.keyboard.press('KeyP');
   await waitPhase(pa, 'paused');
@@ -510,7 +524,7 @@ test('everything loads from this origin; play continues offline and the scores a
   const errors = await open(page);
   await start(page);
   await context.setOffline(true);
-  await shootSucker(page);
+  const scored = await shootSucker(page);
   await finishLevel(page);
   await page.fill('#results-name', 'Offline Olly');
   await page.click('#btn-save-level');
@@ -520,7 +534,7 @@ test('everything loads from this origin; play continues offline and the scores a
   expect((await state(page)).outbox).toBeGreaterThan(0); // waiting for the host
   await context.setOffline(false);
   const boards = await hostBoards(page);
-  expect(boards.runs).toEqual([expect.objectContaining({ name: 'Offline Olly', score: 25 })]);
+  expect(boards.runs).toEqual([expect.objectContaining({ name: 'Offline Olly', score: scored })]);
   const foreign = urls.filter((u) => !u.startsWith(baseURL!) && !u.startsWith('data:'));
   expect(foreign).toEqual([]);
   // The only failures allowed are score uploads attempted while the network was off.
@@ -545,8 +559,9 @@ test('can be added to a phone Home Screen: tags, manifest and icons are served',
 });
 
 test('phone landscape: a full scoreboard and career fit the game-over screen; Save works by tap', async ({ browser, request }) => {
-  // Ten earlier runs by the family on another device, over two maps.
+  // Ten earlier runs by the family on another device, over two maps: 15, 25, … 105.
   const events: object[] = [];
+  const earlierRuns: number[] = [];
   const family = ['Hudson', 'Dad', 'Mom', 'Grandma Sue'];
   for (let i = 0; i < 10; i++) {
     const id = `seed-run-${String(i).padStart(4, '0')}`;
@@ -555,6 +570,7 @@ test('phone landscape: a full scoreboard and career fit the game-over screen; Sa
       { type: 'attempt', runId: id, attempt: 1, level: 1, map: 'Haunted House', score: (i + 1) * 10, completed: true },
       { type: 'attempt', runId: id, attempt: 2, level: 2, map: 'Graveyard', score: 5, completed: false },
     );
+    earlierRuns.push((i + 1) * 10 + 5);
   }
   const seeded = await request.post('/api/sync', { data: { device: { id: 'seed-device-0001', fingerprint: 'seed', label: 'Windows · Chrome' }, events } });
   expect((await seeded.json()).accepted).toBe(30);
@@ -563,11 +579,14 @@ test('phone landscape: a full scoreboard and career fit the game-over screen; Sa
   const page = await ctx.newPage();
   const errors = await open(page);
   await start(page, true);
-  await shootSucker(page);
+  const scored = await shootSucker(page);
   for (let i = 0; i < 3; i++) await page.evaluate(() => window.__HR__.hurt());
   await waitPhase(page, 'gameOver');
-  // 25 beats last place (15): it lands 10th, just above the tie at 25 from earlier.
-  await expect(page.locator('#gameover-rank')).toHaveText('#10');
+  // A sucker (25 plus range bonus) beats last place (15). It lands below every earlier run
+  // that scored at least as much, since a tie goes below the older entry.
+  const rank = earlierRuns.filter((score) => score >= scored).length + 1;
+  expect(rank).toBeLessThanOrEqual(10);
+  await expect(page.locator('#gameover-rank')).toHaveText(`#${rank}`);
   await expect(page.locator('#gameover-name')).not.toBeFocused(); // no surprise keyboard on touch
   const save = (await page.locator('#btn-save-score').boundingBox())!;
   expect(save.y + save.height).toBeLessThanOrEqual(360);
@@ -578,9 +597,9 @@ test('phone landscape: a full scoreboard and career fit the game-over screen; Sa
   expect(overflow).toBeLessThanOrEqual(0);
   await page.screenshot({ path: `${SHOTS}/phone-gameover.png` });
   await page.tap('#btn-save-score');
-  await expect(page.locator('#gameover-rankbadge')).toHaveText('#10 on the scoreboard!');
+  await expect(page.locator('#gameover-rankbadge')).toHaveText(`#${rank} on the scoreboard!`);
   await expect(page.locator('#gameover-boards ol[aria-label="Scoreboard"] li')).toHaveCount(10);
-  await expect(page.locator('#gameover-boards li.you')).toContainText('25');
+  await expect(page.locator('#gameover-boards li.you')).toContainText(String(scored));
   await page.tap('#gameover-boards [role="tab"]:has-text("Career")');
   await expect(page.locator('#gameover-boards ol[aria-label="Career"]')).toContainText('Grandma Sue');
   await expect(page.locator('#gameover-boards ol[aria-label="Career"]')).toContainText('Avg/map: House');

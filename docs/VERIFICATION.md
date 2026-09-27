@@ -48,13 +48,16 @@ Last full run: 2026-09-26, on the final code in this folder.
 ### Browser smoke tests (`e2e/game.spec.ts`, production-style `--mode e2e` build served by `serve:lan`)
 
 The e2e build adds `window.__HR__` fixtures that fast-forward simulation time, toggle spawning,
-spawn/aim at a target and apply a hit. Rules are unchanged, and the fixtures are not in `npm run build`.
+spawn/aim at a target, apply a hit and report the last scored hit (kind, size, range zone, points).
+Rules are unchanged, and the fixtures are not in `npm run build`. Expected scores are derived from
+that hit and `CONFIG`, because the seeded candy spot decides the range bonus.
 
 1. Title shows "Halloween Rush" (never "Pumpkin Panic") over a populated 3D scene. Checked by
    sampling the WebGL buffer (> 60 distinct colours, luminance spread), not just by canvas existence.
-2. Level flow: a real mouse click launches a pumpkin; hitting a sucker gives 25 points and a
-   sucker in the 3D bag; results screen; Next Level → Graveyard with total carried; Replay twice
-   restores the level-start total and candy each time; best stays 50.
+2. Level flow: a real mouse click launches a pumpkin; hitting a sucker gives 25 points plus its
+   range bonus and a sucker in the 3D bag; results screen; Next Level → Graveyard with total
+   carried; Replay twice restores the level-start total and candy each time; best stays the
+   two-level total.
 3. Pause key, window blur while holding fire, hidden tab and pointer-lock loss all pause with no
    time consumed and no phantom auto-fire after resuming.
 4. Holding Space through the end of a level does not press the focused Next Level button, but a
