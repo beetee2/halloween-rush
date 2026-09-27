@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#1a0f26" />
+    <!-- Added to a phone's Home Screen, the game opens without the browser's bars. -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Halloween Rush" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="description" content="Halloween Rush: a spooky-but-fun 3D pumpkin shooting gallery." />
+    <title>Halloween Rush</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cellipse cx='32' cy='38' rx='26' ry='21' fill='%23ff7a18'/%3E%3Crect x='29' y='8' width='6' height='12' rx='2' fill='%234d7a2a'/%3E%3Cpath d='M18 32l6-8 6 8zM34 32l6-8 6 8zM20 44q12 10 24 0l-4 3-4-3-4 3-4-3-4 3z' fill='%23332'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="/src/ui/styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="game" aria-label="Halloween Rush 3D view"></canvas>
+
+      <!-- In-game HUD -->
+      <div id="hud" hidden>
+        <div class="hud-top">
+          <div class="hud-level">
+            <span id="hud-level-num">Level 1</span>
+            <span id="hud-env">Haunted House</span>
+          </div>
+          <div class="hud-timer" id="hud-timer" aria-label="Time left">60</div>
+          <div class="hud-right">
+            <div class="hud-hearts" id="hud-hearts" aria-label="Hearts"></div>
+            <button id="btn-pause" class="icon-btn" type="button" aria-label="Pause">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1.2" /><rect x="14" y="5" width="4" height="14" rx="1.2" /></svg>
+            </button>
+          </div>
+        </div>
+        <div class="hud-scores">
+          <span>Level <b id="hud-level-score">0</b></span>
+          <span>Total <b id="hud-total">0</b></span>
+        </div>
+        <div class="crosshair" id="crosshair" aria-hidden="true"><i></i><i></i><i></i><i></i><b></b></div>
+        <div class="hud-candy" id="hud-candy" aria-label="Candy collected">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 20h14z" fill="#ffd23a" /><path d="M8.2 12.5h7.6L17 16H7z" fill="#ff8a1c" /><path d="M12 3l-1.6 4h3.2z" fill="#fff7e6" /></svg>
+          <span id="hud-candy-count">0</span>
+        </div>
+        <div class="hud-hint" id="hud-hint" hidden></div>
+        <div id="warnings" aria-hidden="true"></div>
+        <div id="popups" aria-hidden="true"></div>
+        <button id="btn-fire" class="fire-btn" type="button" aria-label="Fire pumpkin">
+          <svg viewBox="0 0 64 64" aria-hidden="true"><ellipse cx="32" cy="37" rx="24" ry="19" fill="#ff7a18" /><path d="M20 37c0-10 5-19 12-19s12 9 12 19-5 19-12 19-12-9-12-19z" fill="#ff9a3a" opacity=".6" /><rect x="29" y="10" width="6" height="11" rx="2" fill="#4d7a2a" /></svg>
+          <span>FIRE</span>
+        </button>
+      </div>
+      <div id="damage-flash" aria-hidden="true"></div>
+      <div id="countdown" hidden aria-live="assertive"></div>
+      <div id="teleport" hidden aria-hidden="true"><div class="swirl"></div><div class="teleport-label" id="teleport-label"></div></div>
+
+      <!-- Title -->
+      <section id="screen-title" class="screen" aria-labelledby="title-heading">
+        <div class="card title-card">
+          <h1 id="title-heading" class="logo"><span>Halloween</span> <span>Rush</span></h1>
+          <p class="tagline">Pumpkin-powered spooky shooting gallery</p>
+          <button id="btn-start" class="btn primary big" type="button">Start the Rush</button>
+          <div class="how">
+            <div class="how-desktop"><b>Computer:</b> move the mouse to aim · click or hold to fire (Space works too) · Esc to pause</div>
+            <div class="how-touch"><b>Touch:</b> drag to aim · hold the pumpkin button to fire · ⏸ to pause</div>
+            <div>Survive 60 seconds with 3 hearts. Small targets score more. Shoot the spiders' jack-o'-lanterns before they reach you!</div>
+          </div>
+          <div class="bests" id="title-bests"></div>
+          <div class="btn-row">
+            <button id="btn-boards" class="btn ghost" type="button">Leaderboards</button>
+            <button id="btn-settings-title" class="btn ghost" type="button">Settings</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Pause -->
+      <section id="screen-pause" class="screen" hidden aria-labelledby="pause-heading">
+        <div class="card">
+          <h2 id="pause-heading">Paused</h2>
+          <p class="sub" id="pause-sub">Take a breather — the monsters will wait.</p>
+          <button id="btn-resume" class="btn primary big" type="button">Resume</button>
+          <button id="btn-settings-pause" class="btn ghost" type="button">Settings</button>
+          <button id="btn-quit" class="btn ghost" type="button">Quit to Title</button>
+        </div>
+      </section>
+
+      <!-- Level results -->
+      <section id="screen-results" class="screen" hidden aria-labelledby="results-heading">
+        <div class="card">
+          <h2 id="results-heading">Level Complete!</h2>
+          <p class="sub" id="results-env"></p>
+          <div class="stat-row"><span>Level score</span><b id="results-level">0</b></div>
+          <div class="stat-row"><span>Running total</span><b id="results-total">0</b></div>
+          <div class="candy-list" id="results-candy"></div>
+          <div class="badges">
+            <div class="badge" id="results-best" hidden>Best run on this device!</div>
+            <div class="badge" id="results-levelbest" hidden></div>
+          </div>
+          <form id="results-entry" class="name-entry" hidden>
+            <label for="results-name">Best score ever on <b id="results-entry-level">Level 1</b>! Type your name:</label>
+            <div class="name-row">
+              <input id="results-name" type="text" placeholder="Your name" autocomplete="off" autocapitalize="words" autocorrect="off" spellcheck="false" enterkeyhint="done" />
+              <button id="btn-save-level" class="btn primary" type="submit">Save</button>
+            </div>
+          </form>
+          <div class="btn-row" id="results-actions">
+            <button id="btn-replay" class="btn ghost" type="button">Replay Level</button>
+            <button id="btn-next" class="btn primary" type="button">Next Level</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Game over -->
+      <section id="screen-gameover" class="screen" hidden aria-labelledby="gameover-heading">
+        <div class="card gameover-card">
+          <div class="gameover-main">
+            <h2 id="gameover-heading">Out of Hearts!</h2>
+            <p class="sub" id="gameover-sub"></p>
+            <div class="stat-row"><span>Run total</span><b id="gameover-total">0</b></div>
+            <div class="candy-list" id="gameover-candy"></div>
+            <div class="badges">
+              <div class="badge" id="gameover-newbest" hidden>Best run on this device!</div>
+              <div class="badge" id="gameover-rankbadge" hidden></div>
+            </div>
+            <form id="gameover-entry" class="name-entry" hidden>
+              <label for="gameover-name">You made the scoreboard at <b id="gameover-rank">#1</b>! Type your name:</label>
+              <div class="name-row">
+                <input id="gameover-name" type="text" placeholder="Your name" autocomplete="off" autocapitalize="words" autocorrect="off" spellcheck="false" enterkeyhint="done" />
+                <button id="btn-save-score" class="btn primary" type="submit">Save</button>
+              </div>
+            </form>
+            <div class="btn-row" id="gameover-actions">
+              <button id="btn-title" class="btn ghost" type="button">Title</button>
+              <button id="btn-newrun" class="btn primary" type="button">New Run</button>
+            </div>
+          </div>
+          <div class="boards" id="gameover-boards"></div>
+        </div>
+      </section>
+
+      <!-- Leaderboards (from the title) -->
+      <section id="screen-boards" class="screen" hidden aria-labelledby="boards-heading">
+        <div class="card boards-card">
+          <h2 id="boards-heading">Leaderboards</h2>
+          <div class="boards" id="title-boards"></div>
+          <button id="btn-boards-done" class="btn primary" type="button">Back</button>
+        </div>
+      </section>
+
+      <!-- Settings (opened from title or pause) -->
+      <section id="screen-settings" class="screen" hidden aria-labelledby="settings-heading">
+        <div class="card">
+          <h2 id="settings-heading">Settings</h2>
+          <label class="field"><span>Volume</span><input id="set-volume" type="range" min="0" max="1" step="0.05" /></label>
+          <label class="field check"><input id="set-mute" type="checkbox" /><span>Mute all sound</span></label>
+          <label class="field"><span>Aim sensitivity <output id="set-sens-out"></output></span><input id="set-sens" type="range" min="0.25" max="3" step="0.05" /></label>
+          <p class="sub small" id="set-storage"></p>
+          <p class="sub small" id="set-device"></p>
+          <button id="btn-settings-done" class="btn primary" type="button">Done</button>
+        </div>
+      </section>
+
+      <!-- Fatal error -->
+      <section id="screen-error" class="screen" hidden role="alert">
+        <div class="card">
+          <h2>Halloween Rush can't start</h2>
+          <p id="error-msg"></p>
+          <ul class="sub" id="error-tips"></ul>
+          <button id="btn-reload" class="btn primary" type="button">Reload</button>
+        </div>
+      </section>
+
+      <div id="rotate" hidden role="alert">
+        <svg viewBox="0 0 64 64" aria-hidden="true"><rect x="20" y="8" width="24" height="44" rx="4" fill="none" stroke="#ffd23a" stroke-width="4" /><path d="M50 40a18 18 0 0 1-18 18" fill="none" stroke="#ff8a1c" stroke-width="4" /><path d="M28 54l4 4 4-4" fill="none" stroke="#ff8a1c" stroke-width="4" /></svg>
+        <p>Turn your device sideways to play Halloween Rush</p>
+      </div>
+
+      <noscript><div class="noscript">Halloween Rush needs JavaScript enabled.</div></noscript>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

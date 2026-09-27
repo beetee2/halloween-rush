@@ -1,0 +1,16 @@
+{
+  "name": "Halloween Rush",
+  "short_name": "Halloween Rush",
+  "description": "A spooky-but-fun 3D pumpkin shooting gallery.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#1a0f26",
+  "theme_color": "#1a0f26",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

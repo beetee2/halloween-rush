@@ -1,0 +1,35 @@
+{
+  "name": "halloween-rush",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Halloween Rush: a first-person 3D Halloween shooting gallery for the browser, with household leaderboards.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "dev": "vite",
+    "dev:lan": "vite --host 0.0.0.0",
+    "build": "tsc --noEmit && vite build",
+    "build:e2e": "vite build --mode e2e --outDir dist-e2e",
+    "serve:lan": "node scripts/serve-lan.mjs",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "verify:serve": "node scripts/verify-serve.mjs"
+  },
+  "dependencies": {
+    "sirv": "^3.0.2",
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^26.6.3",
+    "@types/three": "^0.186.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.1",
+    "vitest": "^5.0.2"
+  }
+}
