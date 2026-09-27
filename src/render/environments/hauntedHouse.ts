@@ -10,12 +10,15 @@ const PORCH = 0x5b4636;
 const FENCE = 0xd9cfe8;
 const BARK = 0x3b2b3a;
 
-/** Glowing window with a dark frame, cross mullions and optional crooked shutters. */
+/**
+ * Glowing window with a dark frame, cross mullions and optional crooked shutters. The
+ * mullions run onto the frame so their ends are not flush with the glass edges.
+ */
 function houseWindow(b: EnvBuilder, x: number, y: number, z: number, w: number, h: number, shutters: boolean, tilt = 0): void {
   b.box([w + 0.24, h + 0.24, 0.1], TRIM, { pos: [x, y, z], rot: [0, 0, tilt] });
   b.box([w, h, 0.06], WINDOW, { pos: [x, y, z + 0.04], rot: [0, 0, tilt] }, 'glow');
-  b.box([0.08, h, 0.06], TRIM, { pos: [x, y, z + 0.08], rot: [0, 0, tilt] });
-  b.box([w, 0.08, 0.06], TRIM, { pos: [x, y + h * 0.1, z + 0.08], rot: [0, 0, tilt] });
+  b.box([0.08, h + 0.1, 0.06], TRIM, { pos: [x, y, z + 0.08], rot: [0, 0, tilt] });
+  b.box([w + 0.1, 0.08, 0.06], TRIM, { pos: [x, y + h * 0.1, z + 0.08], rot: [0, 0, tilt] });
   b.box([w + 0.4, 0.12, 0.2], TRIM, { pos: [x, y - h / 2 - 0.14, z + 0.06] });
   if (shutters) {
     b.box([w * 0.45, h * 1.05, 0.06], SIDING_DARK, { pos: [x - w / 2 - w * 0.28, y - 0.05, z + 0.03], rot: [0, 0, 0.12] });

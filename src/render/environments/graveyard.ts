@@ -55,7 +55,10 @@ export function buildGraveyard(): Environment {
     .ground(0x34463a);
 
   for (let i = 0; i < 16; i++) {
-    b.patch(-24 + rand() * 48, -3 - rand() * 28, 1.5 + rand() * 2, 1 + rand() * 1.4, rand() < 0.5 ? 0x3d5244 : 0x2b3a30, 0.008);
+    const [x, z, rx, rz] = [-24 + rand() * 48, -3 - rand() * 28, 1.5 + rand() * 2, 1 + rand() * 1.4];
+    // The two shades sit at different heights so overlapping patches never z-fight.
+    const light = rand() < 0.5;
+    b.patch(x, z, rx, rz, light ? 0x3d5244 : 0x2b3a30, light ? 0.006 : 0.009);
   }
   // Worn dirt path up to the gate
   b.patch(0, -8, 1.4, 7, 0x4f4436, 0.012);

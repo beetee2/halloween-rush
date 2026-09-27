@@ -189,14 +189,10 @@ export class EnvBuilder {
     const moon = new THREE.Mesh(geom, mat);
     moon.position.set(...pos);
     this.group.add(moon);
-    const haloMat = this.tracker.track(materials().halo.clone());
-    haloMat.color.set(haloColor);
-    haloMat.opacity = 0.55;
-    haloMat.fog = false;
-    const halo = new THREE.Sprite(haloMat);
-    halo.position.set(...pos);
-    halo.scale.setScalar(radius * haloScale);
-    this.group.add(halo);
+    const haloMat = this.tracker.track(
+      new THREE.MeshBasicMaterial({ map: softDotTexture(), color: haloColor, opacity: 0.55, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }),
+    );
+    this.group.add(eyeCard(haloMat, pos, radius * haloScale));
     return this;
   }
 
@@ -243,17 +239,15 @@ export class EnvBuilder {
     return this;
   }
 
-  /** Low drifting fog banks made from soft billboards. */
+  /** Low drifting fog banks made from soft cards (see `eyeCard`). */
   fogBanks(count: number, color: number, opacity: number, area: { xMin: number; xMax: number; zMin: number; zMax: number }, seed = 7, height = 0.9): this {
     const rand = mulberry(seed);
-    const mat = this.tracker.track(new THREE.SpriteMaterial({ map: softDotTexture(), color, transparent: true, opacity, depthWrite: false }));
+    const mat = this.tracker.track(new THREE.MeshBasicMaterial({ map: softDotTexture(), color, transparent: true, opacity, depthWrite: false }));
     for (let i = 0; i < count; i++) {
-      const s = new THREE.Sprite(mat);
       const x0 = area.xMin + rand() * (area.xMax - area.xMin);
       const z = area.zMin + rand() * (area.zMax - area.zMin);
       const w = 7 + rand() * 7;
-      s.scale.set(w, w * 0.28, 1);
-      s.position.set(x0, height * (0.5 + rand() * 0.6), z);
+      const s = eyeCard(mat, [x0, height * (0.5 + rand() * 0.6), z], w, w * 0.28);
       const speed = (0.2 + rand() * 0.35) * (rand() < 0.5 ? -1 : 1);
       const span = area.xMax - area.xMin;
       this.group.add(s);
@@ -261,6 +255,7 @@ export class EnvBuilder {
         let x = x0 + speed * t;
         x = area.xMin + ((((x - area.xMin) % span) + span) % span);
         s.position.x = x;
+        s.lookAt(eyePoint);
       });
     }
     return this;
@@ -338,20 +333,12 @@ export class EnvBuilder {
     return this;
   }
 
-  /**
-   * Additive glow card (lamps, windows, mushrooms). The eye never moves, so the card is
-   * turned to face it once. A sprite would re-orient with every aim change, and whatever
-   * part of it nearby geometry cuts off would pop in and out.
-   */
+  /** Additive glow card (lamps, windows, mushrooms); see `eyeCard`. */
   halo(x: number, y: number, z: number, size: number, color: number, opacity = 0.5): this {
     const mat = this.tracker.track(
       new THREE.MeshBasicMaterial({ map: softDotTexture(), color, opacity, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
     );
-    const card = new THREE.Mesh(unitPlane, mat);
-    card.position.set(x, y, z);
-    card.scale.setScalar(size);
-    card.lookAt(eyePoint);
-    this.group.add(card);
+    this.group.add(eyeCard(mat, [x, y, z], size));
     return this;
   }
 
@@ -399,6 +386,18 @@ export class EnvBuilder {
       },
     };
   }
+}
+
+/**
+ * Flat card turned to face the eye, which never moves. A sprite would re-orient with every
+ * aim change, so whatever part of it nearby geometry cuts off would pop in and out.
+ */
+function eyeCard(mat: THREE.Material, pos: V3, width: number, height = width): THREE.Mesh {
+  const card = new THREE.Mesh(unitPlane, mat);
+  card.position.set(...pos);
+  card.scale.set(width, height, 1);
+  card.lookAt(eyePoint);
+  return card;
 }
 
 function scaleMul(size: V3, s: PartOptions['scale']): V3 {

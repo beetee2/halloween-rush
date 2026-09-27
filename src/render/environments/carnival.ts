@@ -72,9 +72,10 @@ export function buildCarnival(): Environment {
       b.box([1.05, 0.04, 1.05], (i + j) % 2 === 0 ? 0x4c3f66 : 0x2b2240, { pos: [j * 1.05, 0.02, -2.5 - i * 1.05] });
     }
   }
-  // Scattered popcorn and tickets
+  // Scattered popcorn and tickets, each turned differently so two pieces that land together
+  // never share a face plane (and z-fight).
   for (let i = 0; i < 60; i++) {
-    b.add(new THREE.IcosahedronGeometry(0.06, 0), rand() < 0.7 ? 0xfff2c0 : 0xff5a6a, { pos: [-12 + rand() * 24, 0.05, -3 - rand() * 18] });
+    b.add(new THREE.IcosahedronGeometry(0.06, 0), rand() < 0.7 ? 0xfff2c0 : 0xff5a6a, { pos: [-12 + rand() * 24, 0.05, -3 - rand() * 18], rot: [i * 1.3, i * 2.1, 0] });
   }
 
   // ---------------------------------------------------------------- tents & booths

@@ -87,8 +87,11 @@ export function buildForest(): Environment {
 
   // Leaf litter and a winding path.
   for (let i = 0; i < 40; i++) {
-    const c = [0x7a4a1a, 0x5a3a18, 0x8a5a20, 0x3e3522][Math.floor(rand() * 4)] as number;
-    b.patch(-20 + rand() * 40, -3 - rand() * 26, 0.5 + rand() * 1.3, 0.4 + rand() * 0.8, c, 0.008 + rand() * 0.004, rand() * 3);
+    const k = Math.floor(rand() * 4);
+    const [x, z, rx, rz] = [-20 + rand() * 40, -3 - rand() * 26, 0.5 + rand() * 1.3, 0.4 + rand() * 0.8];
+    rand(); // was a random height; still drawn so the rest of the forest keeps its layout
+    // Each leaf colour lies on its own layer so overlapping patches never z-fight.
+    b.patch(x, z, rx, rz, [0x7a4a1a, 0x5a3a18, 0x8a5a20, 0x3e3522][k] as number, 0.006 + k * 0.002, rand() * 3);
   }
   for (let i = 0; i < 12; i++) {
     const zz = -3 - i * 2.2;
