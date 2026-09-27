@@ -97,12 +97,14 @@ describe('projectiles and hits', () => {
     const { mediumFromM, farFromM, bonus } = CONFIG.range;
     const base = CONFIG.points.medium;
     // A sucker straight ahead at each depth. The shot lands ~0.84 m short of its centre
-    // (sucker radius + pumpkin radius), which the last case relies on.
+    // (sucker radius + pumpkin radius) and the launcher is 1 m ahead of the eye, which the
+    // last two cases rely on.
     const cases = [
       { z: -(mediumFromM - 3), points: base + bonus.near },
       { z: -(mediumFromM + farFromM) / 2, points: base + bonus.medium },
       { z: -(farFromM + 3), points: base + bonus.far },
       { z: -(mediumFromM + 0.3), points: base + bonus.near }, // centre past the line, hit short of it
+      { z: -(farFromM + 1.3), points: base + bonus.far }, // hit past the line, but not from the launcher
     ];
     for (const { z, points } of cases) {
       const layout = openLayout();
