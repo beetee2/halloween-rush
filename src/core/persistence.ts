@@ -48,6 +48,11 @@ function scoreboard(v: unknown): ScoreEntry[] {
       level: Math.floor(num(e.level, 0, 0, 1e6)),
     };
     if (typeof e.runId === 'string' && RUN_ID.test(e.runId)) entry.runId = e.runId;
+    const shots = Math.floor(num(e.shots, 0, 0, 1e9));
+    if (shots > 0) {
+      entry.shots = shots;
+      entry.hits = Math.floor(num(e.hits, 0, 0, shots));
+    }
     out.push(entry);
   }
   // Stable sort: equal scores keep their saved order.

@@ -93,6 +93,49 @@ describe('projectiles and hits', () => {
     expect(world.projectiles.length).toBe(0);
   });
 
+  it('adds the range bonus by distance from the eye to where the shot lands', () => {
+    const { mediumFromM, farFromM, bonus } = CONFIG.range;
+    const base = CONFIG.points.medium;
+    // A sucker straight ahead at each depth. The shot lands ~0.84 m short of its centre
+    // (sucker radius + pumpkin radius) and the launcher is 1 m ahead of the eye, which the
+    // last two cases rely on.
+    const cases = [
+      { z: -(mediumFromM - 3), points: base + bonus.near },
+      { z: -(mediumFromM + farFromM) / 2, points: base + bonus.medium },
+      { z: -(farFromM + 3), points: base + bonus.far },
+      { z: -(mediumFromM + 0.3), points: base + bonus.near }, // centre past the line, hit short of it
+      { z: -(farFromM + 1.3), points: base + bonus.far }, // hit past the line, but not from the launcher
+    ];
+    for (const { z, points } of cases) {
+      const layout = openLayout();
+      layout.candySpots = [{ x: 0, z }];
+      const { world, run, log } = setup(0, layout);
+      world.spawningEnabled = false;
+      const sucker = world.spawn('sucker')!;
+      stepFor(world, run, 1.2);
+      world.fire(muzzle(), aimAt(sucker), run);
+      stepFor(world, run, 0.8);
+      expect(log.hits, `sucker at z = ${z}`).toEqual([{ kind: 'sucker', points }]);
+    }
+  });
+
+  it('marks the shot that hit; a second pumpkin at the same target stays a miss', () => {
+    const { world, run } = setup();
+    world.spawningEnabled = false;
+    world.spawn('sucker');
+    stepFor(world, run, 1.2);
+    const target = world.targets[0]!;
+    const first = run.fireShot(0, 0);
+    world.fire(muzzle(), aimAt(target), run, first);
+    stepFor(world, run, 0.05);
+    const second = run.fireShot(0, 0);
+    world.fire(muzzle(), aimAt(target), run, second);
+    stepFor(world, run, 2.5);
+    expect(first).toMatchObject({ target: 'sucker', zone: 'near', points: 25 });
+    expect(second).toMatchObject({ target: null, zone: null, points: 0 });
+    expect([run.levelHits, run.shots.length]).toEqual([1, 2]);
+  });
+
   it('solid scenery stops the shot before a target behind it', () => {
     const layout = openLayout();
     layout.blockers.push({ min: { x: -3, y: 0, z: -7 }, max: { x: 3, y: 5, z: -6.5 } });

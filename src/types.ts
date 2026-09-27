@@ -43,6 +43,19 @@ export type Phase =
 
 export type Inventory = Record<CandyKind, number>;
 
+/** One pumpkin fired during a level. The hit fields are filled in when (if) it lands on a target. */
+export interface ShotRecord {
+  /** Milliseconds into the level (after the countdown). */
+  ms: number;
+  /** Aim when fired, in radians (yaw: left is positive; pitch: up is positive). */
+  yaw: number;
+  pitch: number;
+  /** What it hit, or null for a miss. */
+  target: TargetKind | null;
+  zone: RangeZone | null;
+  points: number;
+}
+
 export interface Settings {
   /** Master volume 0..1. */
   volume: number;
@@ -66,4 +79,7 @@ export interface ScoreEntry {
   level: number;
   /** The run this came from, when known (to highlight it). */
   runId?: string;
+  /** Pumpkins fired and target hits over the run, when known. */
+  shots?: number;
+  hits?: number;
 }

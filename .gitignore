@@ -8,3 +8,4 @@ e2e/screenshots/
 .env.*
 *.log
 data/
+.wrangler/

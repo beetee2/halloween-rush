@@ -148,6 +148,14 @@ export const CONFIG = {
     outSec: 0.7,
   },
 
+  screens: {
+    /**
+     * Level results and game over ignore clicks and taps this long after appearing, so a
+     * player still firing when the level ends can't skip them unseen.
+     */
+    clickLockSec: 1,
+  },
+
   scoreboard: {
     /** Runs kept on the local scoreboard. */
     size: 10,

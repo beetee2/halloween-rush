@@ -153,6 +153,7 @@
           <h2 id="results-heading">Level Complete!</h2>
           <p class="sub" id="results-env"></p>
           <div class="stat-row"><span>Level score</span><b id="results-level">0</b></div>
+          <div class="stat-row"><span>Accuracy</span><b id="results-accuracy">0%</b></div>
           <div class="stat-row"><span>Running total</span><b id="results-total">0</b></div>
           <div class="candy-list" id="results-candy"></div>
           <div class="badges">
@@ -160,7 +161,7 @@
             <div class="badge" id="results-levelbest" hidden></div>
           </div>
           <form id="results-entry" class="name-entry" hidden>
-            <label for="results-name">Best score ever on <b id="results-entry-level">Level 1</b>! Type your name:</label>
+            <label for="results-name"><b id="results-why">Best score ever on Level 1</b>! Type your name:</label>
             <div class="name-row">
               <input id="results-name" type="text" placeholder="Your name" autocomplete="off" autocapitalize="words" autocorrect="off" spellcheck="false" enterkeyhint="done" />
               <button id="btn-save-level" class="btn primary" type="submit">Save</button>
@@ -181,13 +182,14 @@
             <h2 id="gameover-heading">Out of Hearts!</h2>
             <p class="sub" id="gameover-sub"></p>
             <div class="stat-row"><span>Run total</span><b id="gameover-total">0</b></div>
+            <div class="stat-row"><span>Accuracy</span><b id="gameover-accuracy">0%</b></div>
             <div class="candy-list" id="gameover-candy"></div>
             <div class="badges">
               <div class="badge" id="gameover-newbest" hidden>Best run on this device!</div>
               <div class="badge" id="gameover-rankbadge" hidden></div>
             </div>
             <form id="gameover-entry" class="name-entry" hidden>
-              <label for="gameover-name">You made the scoreboard at <b id="gameover-rank">#1</b>! Type your name:</label>
+              <label for="gameover-name"><b id="gameover-why">#1 on the scoreboard</b>! Type your name:</label>
               <div class="name-row">
                 <input id="gameover-name" type="text" placeholder="Your name" autocomplete="off" autocapitalize="words" autocorrect="off" spellcheck="false" enterkeyhint="done" />
                 <button id="btn-save-score" class="btn primary" type="submit">Save</button>

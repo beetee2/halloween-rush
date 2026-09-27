@@ -1,19 +1,31 @@
+import type { RangeZone, ShotRecord, TargetKind } from '../types';
 import type { DeviceInfo } from './device';
 
 type StorageLike = Pick<Storage, 'getItem' | 'setItem'>;
 type Http = (url: string, init: RequestInit) => Promise<Response>;
 
-/** What a device reports to the household scores database (see scripts/scores-api.mjs). */
+/** A shot as sent to the host: [ms into the level, yaw, pitch, target | null, range zone | null, points]. */
+export type ShotTuple = [ms: number, yaw: number, pitch: number, target: TargetKind | null, zone: RangeZone | null, points: number];
+
+/** What a device reports to the scores database (see scripts/scores-core.mjs). */
 export type SyncEvent =
   | { type: 'run'; id: string; player: string }
-  | { type: 'attempt'; runId: string; attempt: number; level: number; map: string; score: number; completed: boolean }
+  | { type: 'attempt'; runId: string; attempt: number; level: number; map: string; score: number; completed: boolean; shots?: ShotTuple[] }
   | { type: 'name'; runId: string; name: string };
+
+const round3 = (v: number) => Math.round(v * 1000) / 1000;
+
+export function shotTuple(s: ShotRecord): ShotTuple {
+  return [s.ms, round3(s.yaw), round3(s.pitch), s.target, s.zone, s.points];
+}
 
 export interface RunRow {
   runId: string;
   name: string;
   score: number;
   level: number;
+  shots: number;
+  hits: number;
 }
 
 export interface LevelRow {
@@ -22,6 +34,17 @@ export interface LevelRow {
   name: string;
   score: number;
   runId: string;
+}
+
+/** One of the ten best finished levels on a map. */
+export interface MapRow {
+  map: string;
+  name: string;
+  score: number;
+  level: number;
+  runId: string;
+  shots: number;
+  hits: number;
 }
 
 export interface MapAverage {
@@ -36,23 +59,29 @@ export interface CareerRow {
   games: number;
   best: number;
   furthest: number;
+  shots: number;
+  hits: number;
   maps: MapAverage[];
 }
 
 export interface Boards {
   runs: RunRow[];
   levels: LevelRow[];
+  maps: MapRow[];
   career: CareerRow[];
 }
 
 const OUTBOX_KEY = 'halloween-rush:outbox';
 const MAX_OUTBOX = 400;
-const BATCH = 100;
+/** Levels carry their shot logs (a few KB each), so requests stay well under the host's 1 MB limit. */
+const BATCH = 25;
 const EVENT_TYPES = new Set(['run', 'attempt', 'name']);
 
 const obj = (v: unknown): Record<string, unknown> => (v !== null && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const isStr = (v: unknown): v is string => typeof v === 'string';
+/** Shot counts; a host from before shot tracking sends none. */
+const count = (v: unknown): number => (isNum(v) ? v : 0);
 
 function rows<T>(list: unknown, read: (o: Record<string, unknown>) => T | null): T[] {
   return Array.isArray(list) ? list.map((x) => read(obj(x))).filter((x): x is T => x !== null) : [];
@@ -63,9 +92,16 @@ export function parseBoards(raw: unknown): Boards | null {
   const r = obj(raw);
   if (!Array.isArray(r.runs) || !Array.isArray(r.levels) || !Array.isArray(r.career)) return null;
   return {
-    runs: rows(r.runs, (o) => (isStr(o.runId) && isStr(o.name) && isNum(o.score) && isNum(o.level) ? { runId: o.runId, name: o.name, score: o.score, level: o.level } : null)),
+    runs: rows(r.runs, (o) =>
+      isStr(o.runId) && isStr(o.name) && isNum(o.score) && isNum(o.level) ? { runId: o.runId, name: o.name, score: o.score, level: o.level, shots: count(o.shots), hits: count(o.hits) } : null,
+    ),
     levels: rows(r.levels, (o) =>
       isNum(o.level) && isStr(o.map) && isStr(o.name) && isNum(o.score) && isStr(o.runId) ? { level: o.level, map: o.map, name: o.name, score: o.score, runId: o.runId } : null,
+    ),
+    maps: rows(r.maps, (o) =>
+      isStr(o.map) && isStr(o.name) && isNum(o.score) && isNum(o.level) && isStr(o.runId)
+        ? { map: o.map, name: o.name, score: o.score, level: o.level, runId: o.runId, shots: count(o.shots), hits: count(o.hits) }
+        : null,
     ),
     career: rows(r.career, (o) =>
       isStr(o.name) && isNum(o.points) && isNum(o.games) && isNum(o.best) && isNum(o.furthest)
@@ -75,6 +111,8 @@ export function parseBoards(raw: unknown): Boards | null {
             games: o.games,
             best: o.best,
             furthest: o.furthest,
+            shots: count(o.shots),
+            hits: count(o.hits),
             maps: rows(o.maps, (m) => (isStr(m.map) && isNum(m.avg) && isNum(m.plays) ? { map: m.map, avg: m.avg, plays: m.plays } : null)),
           }
         : null,
@@ -92,7 +130,7 @@ function loadOutbox(storage: StorageLike | null): SyncEvent[] {
 }
 
 /**
- * Sends finished levels, runs and names to the host's scores database and keeps the latest
+ * Sends finished levels (with their shots), runs and names to the host's scores database and keeps the latest
  * leaderboards. Events wait in an outbox saved in this browser until the host confirms them,
  * so a Wi-Fi hiccup or a closed tab loses nothing; every event carries its own id, so
  * sending one twice is harmless. The game never waits on any of this.

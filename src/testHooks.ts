@@ -1,14 +1,25 @@
 import { CONFIG } from './config';
 import type { Game } from './game';
 import type { SpawnKind } from './sim/world';
+import type { RangeZone, SizeClass, TargetKind } from './types';
 
 /**
  * Deterministic fixtures for browser automation. This module is only imported when the
  * app is built with `--mode e2e`; production builds do not contain it and players have
- * no access to it. It never changes game rules, it only drives time and spawning.
+ * no access to it. It never changes game rules, it only drives time and spawning and
+ * records hits.
  */
 export function installTestHooks(game: Game): void {
   const step = CONFIG.sim.maxStepSec;
+  // Which spot a seeded target lands on decides its range bonus, so tests read the scored
+  // hit back instead of hard-coding points. The run's own rule still awards them.
+  let lastHit: { kind: TargetKind; size: SizeClass; zone: RangeZone; points: number } | null = null;
+  const awardHit = game.run.awardHit.bind(game.run);
+  game.run.awardHit = (kind, size, zone = 'near', shot = null) => {
+    const points = awardHit(kind, size, zone, shot);
+    lastHit = { kind, size, zone, points };
+    return points;
+  };
   const api = {
     state() {
       const r = game.run;
@@ -44,12 +55,26 @@ export function installTestHooks(game: Game): void {
     setSpawning(on: boolean) {
       game.world.spawningEnabled = on;
     },
-    spawn(kind: SpawnKind) {
-      return game.world.spawn(kind)?.id ?? null;
+    /**
+     * Spawn a target. `near` respawns it until it stands inside the no-bonus range, so a hit
+     * scores exactly its base points (spawn spots are random and some earn a range bonus).
+     */
+    spawn(kind: SpawnKind, near = false) {
+      for (let i = 0; i < 50; i++) {
+        const t = game.world.spawn(kind);
+        if (!t || !near || t.position.distanceTo(game.world.eye) < CONFIG.range.mediumFromM) return t?.id ?? null;
+        t.removed = true;
+        game.world.sweep(0);
+      }
+      return null;
     },
     clearTargets() {
       for (const t of [...game.world.targets]) t.removed = true;
       game.world.sweep(0);
+    },
+    /** The most recent hit: target kind and size, range zone and the points awarded. */
+    lastHit() {
+      return lastHit;
     },
     /** Point the crosshair at a target's current position. */
     aimAt(id: number) {

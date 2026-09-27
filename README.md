@@ -8,9 +8,10 @@ drops a miniature candy into the physical trick-or-treat bag beside you.
 Built with TypeScript (strict), Three.js and Vite. All models, textures and sounds are
 generated in code; the only image files are the icons and the link-preview card, rendered from
 code by `scripts/make-icons.mjs`. The public site is https://halloweenrush.app/. Gameplay runs entirely in each
-browser. The only thing sent over the network after loading is each finished level, which goes
-to a small **household scores database** (SQLite) on the computer hosting the game. That feeds
-the shared scoreboard, the career leaderboard and the level bests.
+browser. The only thing sent over the network after loading is each finished level (with a log
+of every shot) and the names players type. They go to a small **scores database**: Cloudflare D1
+for the deployed game, shared by everyone who plays it, or a SQLite file on the computer hosting
+the game on a home network. That feeds the scoreboard, career, maps and level-best leaderboards.
 
 ## Prerequisites
 
@@ -37,6 +38,7 @@ Browser tests also need Playwright's Chromium once: `npx playwright install chro
 | `npm test` | Unit/simulation tests (Vitest) |
 | `npm run test:e2e` | Browser smoke tests (Playwright + Chromium, builds `dist-e2e/` itself) |
 | `npm run verify:serve` | Starts `serve:lan` against `dist/` and checks the page and assets over loopback and the LAN address |
+| `npx wrangler dev` | After `npm run build`: the deployed setup locally (static `dist/` plus the scores Worker on a local D1 database in `.wrangler/`), port 8787 |
 
 ## Controls
 
@@ -54,26 +56,36 @@ Settings and personal bests are saved in the browser.
 
 ## Names and leaderboards
 
-- **Level best:** finish a level with more points than anyone has ever scored on that level
-  number and the results screen asks for your name before Replay/Next come back.
-- **Scoreboard:** when a run ends, the game-over screen always shows the top 10 runs. If yours
-  made it, type your name (the last name used on that device is filled in; Enter or **Save**).
-  A name typed at a level best counts for the whole run, so you're only asked once per run.
-  Leave it blank and the run is listed as a guest of that device, e.g. "Guest (iPhone · Safari)".
-- **Allowed names** (this is a game for kids): one name from the built-in list, optionally
-  followed by a number so two Brads can be "Brad" and "Brad2". The list holds about 10,000
-  first names (US Social Security baby-name data, minus any that read as rude words, slang or
-  slurs), family names like Mom, Grandpa or Abuela, and spooky ones like Pumpkin. Numbers that
-  are rude themselves (69, 420, 666, 88…) or that finish spelling a rude word as look-alike
-  letters ("Ana1", "Bo08", "Josh17") are refused too, and the player is asked to try another.
-  Nothing else gets through, however it's spelled. To allow a name that isn't listed, add it to
-  `src/core/nameList.mjs`. Names saved before this check that aren't allowed show as "Player"
-  on the device and as a guest on the host's boards.
+Four leaderboards, each a top 10 (Level bests: the record per level):
+
+- **Scoreboard:** the best runs. The game-over screen always shows it.
 - **Career:** most points over every game per player, with games played, best run, furthest
-  level and the **average points per level on each map**.
+  level, accuracy and the **average points per level on each map**.
+- **Maps:** the 10 best finished levels on each of the five maps.
 - **Level bests:** the record for finishing each level number, and who holds it.
-- The title screen's **Leaderboards** button shows all three. With the host reachable they cover
-  everyone on the network; otherwise the scoreboard falls back to this device's own runs.
+
+**Names:** make any of the boards and you're asked for your name (the last name used on that
+device is filled in; Enter or **Save**). A level best or a Maps top 10 asks on the results screen;
+a Scoreboard or Career top 10 asks at game over. You're only asked once per run: the name counts
+for the whole run. Leave it blank and the run is listed as a guest of that device, e.g.
+"Guest (iPhone · Safari)".
+
+**Allowed names** (this is a game for kids): one name from the built-in list, optionally followed
+by a number so two Brads can be "Brad" and "Brad2". The list holds about 10,000 first names (US
+Social Security baby-name data, minus any that read as rude words, slang or slurs), family names
+like Mom, Grandpa or Abuela, and spooky ones like Pumpkin. Numbers that are rude themselves (69,
+420, 666, 88…) or that finish spelling a rude word as look-alike letters ("Ana1", "Bo08",
+"Josh17") are refused too, and the player is asked to try another. Nothing else gets through,
+however it's spelled, and the scores server checks again. To allow a name that isn't listed, add
+it to `src/core/nameList.mjs`. Names saved before this check that aren't allowed show as
+"Player".
+
+**Accuracy:** every shot is recorded. The results screen shows the level's accuracy (hits ÷ shots),
+game over shows the run's, and the Scoreboard, Career and Maps rows show a percentage. Replayed
+levels count toward accuracy too: every shot you took is in it.
+
+The title screen's **Leaderboards** button shows all four. With the scores server reachable they
+cover everyone who plays there; otherwise the scoreboard falls back to this device's own runs.
 
 Scoring matches the game exactly: a replayed level replaces the earlier attempt in the run
 total and career points (no farming by replaying), though a replayed attempt can still set a
@@ -94,6 +106,21 @@ personal best start fresh, and it counts as a separate device ("iPhone · Home S
 shared leaderboards are unaffected because they live on the host. If you edit
 `public/icon.svg`, regenerate the PNG icons, `favicon.ico` and the `og-image.png` link-preview
 card with `node scripts/make-icons.mjs`.
+
+## The deployed game (Cloudflare)
+
+Pushing to `main` makes Cloudflare build the game and deploy it with `wrangler.jsonc`: `dist/`
+as static files, plus a small Worker (`worker/index.mjs`) that answers `/api/*` from a **D1
+database** (`halloween-rush-scores`). Everyone who opens the deployed game shares those
+leaderboards, and they persist across deploys. The database is created automatically by the
+first deploy that includes it (Wrangler's automatic provisioning); it starts empty, separate from
+any home-network database. To look at it (needs `npx wrangler login` once):
+
+```bash
+npx wrangler d1 execute halloween-rush-scores --remote --command "select name, label from devices"
+```
+
+The same rules and SQL (`scripts/scores-core.mjs`) run on D1 and on the SQLite file below.
 
 ## Play on the local network
 
@@ -138,8 +165,13 @@ On other devices, open `http://<host-lan-ip>:4173/`.
 (change it with `--db path` or `HR_DB=path`). Back that file up to keep the leaderboards. Stop the
 server and delete it (plus any `-wal`/`-shm` files next to it) to start the boards over.
 Development servers use `data/dev-scores.sqlite` so testing never lands on the family's board.
-Tables: `devices`, `runs` and `attempts` (one row per finished level). For example:
-`sqlite3 data/halloween-rush.sqlite "select label, name, datetime(last_seen/1000,'unixepoch') from devices"`.
+The deployed game keeps the same tables in Cloudflare D1 (above).
+Tables: `devices`, `runs` and `attempts` (one row per level played, with `shots`, `hits` and a
+`shot_log` of every shot). The `shots` view lists one row per shot: time into the level (`ms`),
+aim (`yaw`/`pitch` in radians), `target` and range `zone` (both empty for a miss) and `points`.
+Older database files gain the shot columns automatically. For example:
+`sqlite3 data/halloween-rush.sqlite "select label, name, datetime(last_seen/1000,'unixepoch') from devices"`,
+or shots per kind of target: `sqlite3 data/halloween-rush.sqlite "select target, count(*) from shots group by target"`.
 
 **Device IDs:** each browser gets a random ID the first time it loads the game, kept in its
 `localStorage`. The server also stores a **fingerprint** for it: a hash of the browser, screen,
@@ -182,9 +214,10 @@ storage or a full quota never stops the game; it just won't remember anything.
 - **`Port 4173 is already in use`:** pick another port with `-- --port 4174`.
 - **No sound:** sound starts on the first tap/click; check the in-game mute/volume and the
   device's silent switch.
-- **Leaderboards say they need the game host / only show this device:** the page was served
-  without the scores API (e.g. copied to another static server) or the host is unreachable. Serve
-  it with `npm run serve:lan`; queued results are sent once the host answers.
+- **Leaderboards say they need the scores server / only show this device:** the page was served
+  without the scores API (e.g. copied to another static server) or the server is unreachable.
+  Serve it with `npm run serve:lan` (or use the deployed game); queued results are sent once the
+  server answers.
 - **Mouse stuck / not captured:** press Esc, then Resume. If capture keeps failing, the game
   switches to drag-to-aim automatically.
 
@@ -197,7 +230,9 @@ src/sim/               targets, spawning, projectiles and hits (runs headless in
 src/render/            renderer/stage, procedural models, five environments, launcher + candy bag, effects
 src/input/ audio/ ui/  input (pointer lock, drag, touch), synthesized Web Audio, DOM screens/HUD/leaderboards
 src/net/               device ID + fingerprint, score outbox/sync with the host
-scripts/scores-api.mjs household scores database (node:sqlite) + JSON API, used by serve-lan and Vite
+scripts/scores-core.mjs scores rules, SQL and JSON API, shared by the Worker (D1) and the local server
+scripts/scores-api.mjs  scores-core on a local SQLite file (node:sqlite), used by serve-lan and Vite
+worker/index.mjs       Cloudflare Worker for the deployed game: /api/* on D1
 public/                icons, link-preview image, web app manifest, robots.txt, sitemap.xml, llms.txt, 404 page
 about/index.html       the plain-HTML About / how-to-play / FAQ page
 src/game.ts            ties it together for one player's session
@@ -214,10 +249,15 @@ docs/                  GAME_DESIGN.md, IMPLEMENTATION_PLAN.md, VERIFICATION.md
   practical mobile play with capped pixel ratio, no real-time shadows and bounded effects.
 - No fullscreen button. iPhones can't fullscreen web pages at all; use the Home Screen (above).
   Android's Home Screen version opens fullscreen. Neither was tried on a real phone.
-- The scores API has no passwords: anyone on the home network can post scores or names to it
-  (the host still refuses names that aren't allowed).
-  That's fine for a household, but don't expose the port to the internet.
+- The scores API has no passwords. On a home network that's fine, but the deployed game's API is
+  on the internet: anyone who finds it can post made-up scores (e.g. with `curl`); names are
+  still limited to the allowed ones. Fix a bad entry with `wrangler d1 execute ... --remote`. Don't expose
+  `serve:lan`'s port to the internet either.
+- Cloudflare's free plan limits D1 reads and writes per day. Each finished level is one write,
+  but every leaderboard refresh reads the whole scores table, so a very busy or very old board
+  could reach the daily read limit; the game keeps working and results wait in the outbox.
 - Levels are sent as they finish, so a run still in progress (or one quit from the pause menu)
-  shows on the host's boards with its finished levels. A quit run is never asked for a name; it
-  appears under the last name used on that device, or as a guest.
+  shows on the host's boards with its finished levels. A quit run is only asked for a name if one
+  of its levels made a level best or the Maps top 10; otherwise it appears under the last name
+  used on that device, or as a guest.
 - There are no third-party assets, so no asset-license record is needed.
