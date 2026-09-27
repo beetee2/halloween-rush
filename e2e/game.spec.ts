@@ -353,8 +353,19 @@ test('game over: name onto the scoreboard, career and level boards, new run rese
   await page.keyboard.down('Space'); // the held key auto-repeats...
   await page.keyboard.up('Space');
   await expect(page.locator('#gameover-name')).toHaveValue(''); // ...but types nothing
-  await page.keyboard.type('Hudson');
+  // A name that can't go on the scoreboard is refused, saying why, and the box stays up.
   const runs = page.locator('#gameover-boards ol[aria-label="Scoreboard"]');
+  await page.keyboard.type('Poop');
+  await expect(runs.locator('li.you')).toContainText('Player'); // the row never shows it
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#gameover-name-error')).toContainText("That name isn't allowed.");
+  await expect(page.locator('#gameover-name')).toBeFocused();
+  await expect(page.locator('#btn-newrun')).toBeHidden();
+  await page.keyboard.type('Hudson69'); // replaces the selected text
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#gameover-name-error')).toContainText("That number isn't allowed");
+  await page.keyboard.type('Hudson');
+  await expect(page.locator('#gameover-name-error')).toBeHidden();
   await expect(runs.locator('li.you')).toContainText('Hudson'); // the row follows the typing
   await page.screenshot({ path: `${SHOTS}/desktop-gameover-entry.png` });
   await page.keyboard.press('Enter');
@@ -568,7 +579,7 @@ test('everything loads from this origin; play continues offline and the scores a
   await context.setOffline(true);
   const scored = await shootSucker(page);
   await finishLevel(page);
-  await page.fill('#results-name', 'Offline Olly');
+  await page.fill('#results-name', 'Ollie2');
   await page.click('#btn-save-level');
   await page.click('#btn-next');
   await skipCountdown(page);
@@ -576,7 +587,7 @@ test('everything loads from this origin; play continues offline and the scores a
   expect((await state(page)).outbox).toBeGreaterThan(0); // waiting for the host
   await context.setOffline(false);
   const boards = await hostBoards(page);
-  expect(boards.runs).toEqual([expect.objectContaining({ name: 'Offline Olly', score: scored })]);
+  expect(boards.runs).toEqual([expect.objectContaining({ name: 'Ollie2', score: scored })]);
   const foreign = urls.filter((u) => !u.startsWith(baseURL!) && !u.startsWith('data:'));
   expect(foreign).toEqual([]);
   // The only failures allowed are score uploads attempted while the network was off.
@@ -604,7 +615,7 @@ test('phone landscape: a full scoreboard and career fit the game-over screen; Sa
   // Ten earlier runs by the family on another device, over two maps: 15, 25, … 105.
   const events: object[] = [];
   const earlierRuns: number[] = [];
-  const family = ['Hudson', 'Dad', 'Mom', 'Grandma Sue'];
+  const family = ['Hudson', 'Dad', 'Mom', 'Grandmother'];
   for (let i = 0; i < 10; i++) {
     const id = `seed-run-${String(i).padStart(4, '0')}`;
     events.push(
@@ -643,7 +654,7 @@ test('phone landscape: a full scoreboard and career fit the game-over screen; Sa
   await expect(page.locator('#gameover-boards ol[aria-label="Scoreboard"] li')).toHaveCount(10);
   await expect(page.locator('#gameover-boards li.you')).toContainText(String(scored));
   await page.tap('#gameover-boards [role="tab"]:has-text("Career")');
-  await expect(page.locator('#gameover-boards ol[aria-label="Career"]')).toContainText('Grandma Sue');
+  await expect(page.locator('#gameover-boards ol[aria-label="Career"]')).toContainText('Grandmother');
   await expect(page.locator('#gameover-boards ol[aria-label="Career"]')).toContainText('Avg/map: House');
   await page.screenshot({ path: `${SHOTS}/phone-gameover-career.png` });
   expect(errors).toEqual([]);
@@ -653,7 +664,7 @@ test('phone landscape: a full scoreboard and career fit the game-over screen; Sa
 test('making a Maps or Career top 10 asks for a name too', async ({ page, request }) => {
   // A full scoreboard (100–1,000 on Level 1) and one finished Graveyard level, by four family members.
   const events: object[] = [];
-  const family = ['Hudson', 'Dad', 'Mom', 'Grandma Sue'];
+  const family = ['Hudson', 'Dad', 'Mom', 'Grandmother'];
   for (let i = 0; i < 10; i++) {
     const id = `seed-run-${String(i).padStart(4, '0')}`;
     events.push({ type: 'run', id, player: family[i % family.length] }, { type: 'attempt', runId: id, attempt: 1, level: 1, map: 'Haunted House', score: (i + 1) * 100, completed: true });

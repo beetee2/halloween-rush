@@ -42,6 +42,8 @@ Run `npm run typecheck` and `npm test` before finishing any change.
 - Dev servers write scores to `data/dev-scores.sqlite`; `serve:lan` uses the real household
   file `data/halloween-rush.sqlite`. Never touch the real one in tests.
 - Test hooks (`__HR__`, `installTestHooks`) must stay out of the production bundle.
+- Scoreboard names are an allowlist (`src/core/names.mjs`), enforced by the game and the scores
+  API. Test data needs listed names such as `Hudson`, `Dad` or `Brad2`, not `P1` or two words.
 - Search engines render without WebGL. The no-WebGL path (`UI.showError`) must keep the title
   card visible; don't turn it back into a separate error screen.
 - The production origin `https://halloweenrush.app` is hardcoded in `index.html`,
@@ -52,6 +54,8 @@ Run `npm run typecheck` and `npm test` before finishing any change.
 
 - `src/config.ts` — all gameplay tuning (timings, points, sizes, difficulty, caps).
 - `src/core/` — pure rules (run state, scoring, scoreboard, fire rate, collision, saves).
+  `names.mjs` + `nameList.mjs` (the allowed scoreboard names) are plain JavaScript so
+  `scripts/scores-core.mjs` (LAN host and Worker) can import them too.
 - `src/sim/` — targets, spawning, projectiles and hits; runs headless in tests.
   `World` reports events (`targetSpawned`, `spiderThrow`, …) that `src/game.ts` turns into
   sound and effects.

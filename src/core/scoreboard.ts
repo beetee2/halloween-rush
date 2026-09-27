@@ -1,5 +1,6 @@
 import { CONFIG } from '../config';
 import type { ScoreEntry } from '../types';
+import { approvedName } from './names.mjs';
 
 /** Saved when the name box is left empty. */
 export const DEFAULT_NAME = 'Player';
@@ -8,6 +9,11 @@ export const DEFAULT_NAME = 'Player';
 export function cleanName(raw: string): string {
   const s = raw.replace(/\p{Cc}/gu, ' ').replace(/\s+/g, ' ').trim();
   return Array.from(s).slice(0, CONFIG.scoreboard.nameMaxChars).join('').trim();
+}
+
+/** The typed name, cleaned, if it may go on a scoreboard (see names.mjs); otherwise ''. */
+export function scoreboardName(raw: string): string {
+  return approvedName(cleanName(raw));
 }
 
 /**

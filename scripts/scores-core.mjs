@@ -9,6 +9,7 @@
 //                     → { accepted, rejected, boards }
 //
 // Events are idempotent (client-generated ids), so a device can safely resend its outbox.
+import { approvedName } from '../src/core/names.mjs';
 
 const NAME_MAX_CHARS = 16;
 const BOARD_SIZE = 10;
@@ -19,6 +20,12 @@ const ID = /^[A-Za-z0-9-]{8,64}$/;
 const FINGERPRINT = /^[a-z0-9]{1,32}$/;
 /** Target kinds and range zones are short words (e.g. "witch", "far"). */
 const WORD = /^[A-Za-z]{1,24}$/;
+// Only text the game itself makes reaches the boards, whatever a client sends: approved names
+// (src/core/names.mjs), device labels as deviceLabel() in src/net/device.ts builds them, and the
+// maps in src/render/environments.
+const LABEL = /^(iPhone|iPad|Android|Chromebook|Windows|Mac|Linux|Device) · (Edge|Samsung Internet|Opera|Firefox|Chrome|Safari|Browser|Home Screen)$/;
+const UNKNOWN_DEVICE = 'Unknown device';
+const MAPS = new Set(['Haunted House', 'Graveyard', 'Spooky Forest', 'Pumpkin Patch', 'Haunted Carnival']);
 
 const TABLES = [
   `CREATE TABLE IF NOT EXISTS devices (
@@ -253,7 +260,8 @@ function parseEvent(ev) {
   const e = obj(ev);
   if (e.type === 'run') {
     const runId = id(e.id);
-    return runId && { type: 'run', runId, player: typeof e.player === 'string' ? cleanName(e.player) : '' };
+    // A name that isn't approved leaves the run as a guest's rather than losing it.
+    return runId && { type: 'run', runId, player: typeof e.player === 'string' ? approvedName(cleanName(e.player)) : '' };
   }
   const runId = id(e.runId);
   if (!runId) return null;
@@ -261,13 +269,26 @@ function parseEvent(ev) {
     const attempt = int(e.attempt, 1, 1e6);
     const level = int(e.level, 1, 1e4);
     const score = int(e.score, 0, 1e6);
-    const map = typeof e.map === 'string' ? cleanName(e.map, 32) : '';
     const log = shotLog(e.shots);
-    if (attempt === null || level === null || score === null || !map || typeof e.completed !== 'boolean' || !log) return null;
-    return { type: 'attempt', runId, attempt, level, map, score, completed: e.completed, log };
+    if (attempt === null || level === null || score === null || !MAPS.has(e.map) || typeof e.completed !== 'boolean' || !log) return null;
+    return { type: 'attempt', runId, attempt, level, map: e.map, score, completed: e.completed, log };
   }
-  if (e.type === 'name' && typeof e.name === 'string') return { type: 'name', runId, name: cleanName(e.name) };
+  if (e.type === 'name' && typeof e.name === 'string') {
+    const typed = cleanName(e.name);
+    const name = approvedName(typed);
+    return typed && !name ? null : { type: 'name', runId, name };
+  }
   return null;
+}
+
+/**
+ * A stored name as the boards show it. Names saved before names were checked only appear if
+ * they're approved now; the stored rows are left alone.
+ */
+function shownName(name) {
+  const guest = /^Guest \((.*)\)$/.exec(name);
+  if (guest && (guest[1] === UNKNOWN_DEVICE || LABEL.test(guest[1]))) return name;
+  return approvedName(name) || 'Player';
 }
 
 /** Create the tables; add columns, views, summaries and triggers only when SCHEMA changed. */
@@ -306,7 +327,7 @@ export function createScores(db) {
       if (!deviceId) return { error: 'A device id is required.' };
       if (!Array.isArray(b.events) || b.events.length > MAX_EVENTS) return { error: `Send up to ${MAX_EVENTS} events at a time.` };
       const fingerprint = typeof device.fingerprint === 'string' && FINGERPRINT.test(device.fingerprint) ? device.fingerprint : '';
-      const label = (typeof device.label === 'string' ? cleanName(device.label, 40) : '') || 'Unknown device';
+      const label = typeof device.label === 'string' && LABEL.test(device.label) ? device.label : UNKNOWN_DEVICE;
       const now = Date.now();
       await ready();
 
@@ -362,11 +383,12 @@ export function createScores(db) {
         if (!maps.has(m.playerKey)) maps.set(m.playerKey, []);
         maps.get(m.playerKey).push({ map: m.map, avg: m.avg, plays: m.plays });
       }
+      const named = (x) => ({ ...x, name: shownName(x.name) });
       return {
-        runs: r.runs.map((x) => ({ ...x })),
-        levels: r.levels.map((x) => ({ ...x })),
-        maps: r.maps.map((x) => ({ ...x })),
-        career: r.career.map(({ playerKey, ...x }) => ({ ...x, maps: maps.get(playerKey) ?? [] })),
+        runs: r.runs.map(named),
+        levels: r.levels.map(named),
+        maps: r.maps.map(named),
+        career: r.career.map(({ playerKey, ...x }) => ({ ...named(x), maps: maps.get(playerKey) ?? [] })),
       };
     },
 

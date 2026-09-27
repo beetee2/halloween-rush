@@ -70,6 +70,16 @@ a Scoreboard or Career top 10 asks at game over. You're only asked once per run:
 for the whole run. Leave it blank and the run is listed as a guest of that device, e.g.
 "Guest (iPhone · Safari)".
 
+**Allowed names** (this is a game for kids): one name from the built-in list, optionally followed
+by a number so two Brads can be "Brad" and "Brad2". The list holds about 10,000 first names (US
+Social Security baby-name data, minus any that read as rude words, slang or slurs), family names
+like Mom, Grandpa or Abuela, and spooky ones like Pumpkin. Numbers that are rude themselves (69,
+420, 666, 88…) or that finish spelling a rude word as look-alike letters ("Ana1", "Bo08",
+"Josh17") are refused too, and the player is asked to try another. Nothing else gets through,
+however it's spelled, and the scores server checks again. To allow a name that isn't listed, add
+it to `src/core/nameList.mjs`. Names saved before this check that aren't allowed show as
+"Player".
+
 **Accuracy:** every shot is recorded. The results screen shows the level's accuracy (hits ÷ shots),
 game over shows the run's, and the Scoreboard, Career and Maps rows show a percentage. Replayed
 levels count toward accuracy too: every shot you took is in it.
@@ -240,8 +250,8 @@ docs/                  GAME_DESIGN.md, IMPLEMENTATION_PLAN.md, VERIFICATION.md
 - No fullscreen button. iPhones can't fullscreen web pages at all; use the Home Screen (above).
   Android's Home Screen version opens fullscreen. Neither was tried on a real phone.
 - The scores API has no passwords. On a home network that's fine, but the deployed game's API is
-  on the internet: anyone who finds it can post made-up scores or names (e.g. with `curl`), and
-  names aren't moderated. Fix a bad entry with `wrangler d1 execute ... --remote`. Don't expose
+  on the internet: anyone who finds it can post made-up scores (e.g. with `curl`); names are
+  still limited to the allowed ones. Fix a bad entry with `wrangler d1 execute ... --remote`. Don't expose
   `serve:lan`'s port to the internet either.
 - Cloudflare's free plan limits D1 reads and writes per day. Each finished level is one write,
   but every leaderboard refresh reads the whole scores table, so a very busy or very old board

@@ -1,5 +1,5 @@
 import { CONFIG } from '../config';
-import { accuracy, cleanName, DEFAULT_NAME } from '../core/scoreboard';
+import { accuracy, DEFAULT_NAME, scoreboardName } from '../core/scoreboard';
 import type { Bests, CandyKind, Inventory, SizeClass } from '../types';
 import { CANDY_KINDS } from '../types';
 import { BoardPanel, type BoardsView } from './boards';
@@ -94,11 +94,32 @@ export class UI {
     this.titleBoards = new BoardPanel($('title-boards'));
     this.nameInput = $('gameover-name') as HTMLInputElement;
     this.levelNameInput = $('results-name') as HTMLInputElement;
-    for (const input of [this.nameInput, this.levelNameInput]) input.maxLength = CONFIG.scoreboard.nameMaxChars;
+    for (const screen of ['results', 'gameOver'] as const) {
+      const { input, error } = this.nameEntry(screen);
+      input.maxLength = CONFIG.scoreboard.nameMaxChars;
+      input.addEventListener('input', () => (error.hidden = true));
+    }
+    // The scoreboard row only shows the typed name once it's one that can go there.
     this.nameInput.addEventListener('input', () => {
       const cell = this.gameOverBoards.pendingCell;
-      if (cell) cell.textContent = cleanName(this.nameInput.value) || DEFAULT_NAME;
+      if (cell) cell.textContent = scoreboardName(this.nameInput.value) || DEFAULT_NAME;
     });
+  }
+
+  private nameEntry(screen: 'results' | 'gameOver'): { input: HTMLInputElement; error: HTMLElement } {
+    return screen === 'results' ? { input: this.levelNameInput, error: $('results-name-error') } : { input: this.nameInput, error: $('gameover-name-error') };
+  }
+
+  /** The typed name can't go on the scoreboard: say why and let the player try another. */
+  rejectName(screen: 'results' | 'gameOver', problem: 'name' | 'number'): void {
+    const { input, error } = this.nameEntry(screen);
+    error.textContent =
+      problem === 'number' ? "That number isn't allowed with that name. Try another one." : "That name isn't allowed. Try your first name, Mom or Pumpkin, plus a number if you like: Brad2.";
+    error.hidden = false;
+    // The card scrolls on short phone screens.
+    error.scrollIntoView({ block: 'nearest' });
+    input.focus({ preventScroll: true });
+    input.select();
   }
 
   /** The player submitted a name for the run waiting on the scoreboard. */
@@ -328,6 +349,7 @@ export class UI {
     $('results-best').hidden = !d.newBest;
     this.setLevelBadge(d.askName ? null : d.honor, d.name);
     $('results-entry').hidden = !d.askName;
+    $('results-name-error').hidden = true;
     $('results-actions').hidden = d.askName;
     $('results-why').textContent = d.honor ?? '';
     this.levelNameInput.value = d.name;
@@ -363,6 +385,7 @@ export class UI {
     $('gameover-newbest').hidden = !d.newBest;
     this.setRankBadge(d.asking ? null : d.honor);
     $('gameover-entry').hidden = !d.asking;
+    $('gameover-name-error').hidden = true;
     $('gameover-actions').hidden = d.asking;
     $('gameover-why').textContent = d.honor ?? '';
     this.nameInput.value = d.name;
