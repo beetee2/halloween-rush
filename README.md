@@ -60,6 +60,15 @@ Settings and personal bests are saved in the browser.
   made it, type your name (the last name used on that device is filled in; Enter or **Save**).
   A name typed at a level best counts for the whole run, so you're only asked once per run.
   Leave it blank and the run is listed as a guest of that device, e.g. "Guest (iPhone · Safari)".
+- **Allowed names** (this is a game for kids): one name from the built-in list, optionally
+  followed by a number so two Brads can be "Brad" and "Brad2". The list holds about 10,000
+  first names (US Social Security baby-name data, minus any that read as rude words, slang or
+  slurs), family names like Mom, Grandpa or Abuela, and spooky ones like Pumpkin. Numbers that
+  are rude themselves (69, 420, 666, 88…) or that finish spelling a rude word as look-alike
+  letters ("Ana1", "Bo08", "Josh17") are refused too, and the player is asked to try another.
+  Nothing else gets through, however it's spelled. To allow a name that isn't listed, add it to
+  `src/core/nameList.mjs`. Names saved before this check that aren't allowed show as "Player"
+  on the device and as a guest on the host's boards.
 - **Career:** most points over every game per player, with games played, best run, furthest
   level and the **average points per level on each map**.
 - **Level bests:** the record for finishing each level number, and who holds it.
@@ -205,7 +214,8 @@ docs/                  GAME_DESIGN.md, IMPLEMENTATION_PLAN.md, VERIFICATION.md
   practical mobile play with capped pixel ratio, no real-time shadows and bounded effects.
 - No fullscreen button. iPhones can't fullscreen web pages at all; use the Home Screen (above).
   Android's Home Screen version opens fullscreen. Neither was tried on a real phone.
-- The scores API has no passwords: anyone on the home network can post scores or names to it.
+- The scores API has no passwords: anyone on the home network can post scores or names to it
+  (the host still refuses names that aren't allowed).
   That's fine for a household, but don't expose the port to the internet.
 - Levels are sent as they finish, so a run still in progress (or one quit from the pause menu)
   shows on the host's boards with its finished levels. A quit run is never asked for a name; it

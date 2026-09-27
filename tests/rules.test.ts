@@ -180,7 +180,8 @@ describe('persistence', () => {
       bests: { bestRunScore: 1234, furthestLevel: 6 },
       scoreboard: [
         { name: 'Hudson', score: 1234, level: 7 },
-        { name: 'Dad 🎃', score: 900, level: 5 },
+        { name: 'Dad', score: 900, level: 5 },
+        { name: LEGACY_NAME, score: 800, level: 0 },
       ],
       playerName: 'Hudson',
       levelBests: [300, 0, 450],
@@ -214,16 +215,31 @@ describe('persistence', () => {
     });
     expect(d.scoreboard).toHaveLength(10);
     expect(d.scoreboard[0]).toEqual({ name: DEFAULT_NAME, score: 70, level: 0 });
-    expect(d.scoreboard[1]!.name).toBe('x'.repeat(16));
+    expect(d.scoreboard[1]!.name).toBe(DEFAULT_NAME); // not an approved name
     for (let i = 1; i < d.scoreboard.length; i++) expect(d.scoreboard[i - 1]!.score).toBeGreaterThanOrEqual(d.scoreboard[i]!.score);
     expect(d.scoreboard.some((e) => e.name === 'Low' || e.name === 'Neg' || e.name === 'NaN')).toBe(false);
     expect(d.playerName).toBe('');
     expect(sanitize({ scoreboard: { not: 'a list' } }).scoreboard).toEqual([]);
     expect(sanitize({ levelBests: [120, 'x', -4, null, 1e12] }).levelBests).toEqual([120, 0, 0, 0, 1e9]);
-    expect(sanitize({ scoreboard: [{ name: 'A', score: 5, runId: 'r1' }, { name: 'B', score: 4, runId: 'run-ok-12345' }] }).scoreboard).toEqual([
-      { name: 'A', score: 5, level: 0 },
-      { name: 'B', score: 4, level: 0, runId: 'run-ok-12345' },
+    expect(sanitize({ scoreboard: [{ name: 'Ava', score: 5, runId: 'r1' }, { name: 'Ben', score: 4, runId: 'run-ok-12345' }] }).scoreboard).toEqual([
+      { name: 'Ava', score: 5, level: 0 },
+      { name: 'Ben', score: 4, level: 0, runId: 'run-ok-12345' },
     ]);
+  });
+
+  it('drops names saved before names were checked unless they are approved', () => {
+    const d = sanitize({
+      scoreboard: [
+        { name: 'Hudson', score: 30, level: 2 },
+        { name: 'Poopy Pants', score: 20, level: 1 },
+        { name: 'Hudson69', score: 10, level: 1 },
+        { name: 'Hudson2', score: 5, level: 1 },
+      ],
+      playerName: 'Poopy Pants',
+    });
+    expect(d.scoreboard.map((e) => e.name)).toEqual(['Hudson', DEFAULT_NAME, DEFAULT_NAME, 'Hudson2']);
+    expect(d.playerName).toBe('');
+    expect(sanitize({ playerName: ' hudson ' }).playerName).toBe('hudson');
   });
 
   it('survives unavailable storage (throwing accessor)', () => {

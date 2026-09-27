@@ -1,10 +1,13 @@
-import { existsSync } from 'node:fs';
+import { existsSync, rmSync } from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import type { AddressInfo } from 'node:net';
-import { afterEach, describe, expect, it } from 'vitest';
+import { DatabaseSync } from 'node:sqlite';
+import { afterEach, describe, expect, it, onTestFinished } from 'vitest';
 import { createScoresApi, openScores, type ScoresDb } from '../scripts/scores-api.mjs';
+import { deviceLabel } from '../src/net/device';
+import { ENVIRONMENTS } from '../src/render/environments';
 
 const phone = { id: 'device-phone-0001', fingerprint: 'abc123', label: 'iPhone · Safari' };
 const laptop = { id: 'device-laptop-0002', fingerprint: 'def456', label: 'Linux · Chrome' };
@@ -94,12 +97,73 @@ describe('scores database', () => {
   it('keeps the top ten runs, highest first, older first on ties', () => {
     db = openScores(':memory:');
     const events: object[] = [];
-    for (let i = 0; i < 12; i++) events.push(run(`run-top-${String(i).padStart(4, '0')}`, `P${i}`), attempt(`run-top-${String(i).padStart(4, '0')}`, 1, 1, i === 11 ? 50 : (i + 1) * 10));
+    const names = ['Ava', 'Ben', 'Cora', 'Dan', 'Eli', 'Finn', 'Gia', 'Hugo', 'Ivy', 'Jack', 'Kai', 'Leo'];
+    names.forEach((name, i) => events.push(run(`run-top-${String(i).padStart(4, '0')}`, name), attempt(`run-top-${String(i).padStart(4, '0')}`, 1, 1, i === 11 ? 50 : (i + 1) * 10)));
     db.sync({ device: phone, events });
     const scores = db.boards().runs.map((r) => `${r.name}:${r.score}`);
     expect(scores).toHaveLength(10);
-    expect(scores.slice(0, 4)).toEqual(['P10:110', 'P9:100', 'P8:90', 'P7:80']);
-    expect(scores.indexOf('P4:50')).toBeLessThan(scores.indexOf('P11:50'));
+    expect(scores.slice(0, 4)).toEqual(['Kai:110', 'Jack:100', 'Ivy:90', 'Hugo:80']);
+    expect(scores.indexOf('Eli:50')).toBeLessThan(scores.indexOf('Leo:50'));
+  });
+
+  it('only puts approved names on the boards, whatever a client sends', () => {
+    db = openScores(':memory:');
+    const r = db.sync({
+      device: phone,
+      events: [
+        run('run-mmmm-0001', 'Hudson'),
+        attempt('run-mmmm-0001', 1, 1, 100),
+        { type: 'name', runId: 'run-mmmm-0001', name: 'Poopy Pants' },
+        { type: 'name', runId: 'run-mmmm-0001', name: 'Hudson69' },
+        run('run-nnnn-0001', 'Buttface'),
+        attempt('run-nnnn-0001', 1, 1, 50),
+      ],
+    });
+    // The rude names are refused: the first run keeps its name, the second becomes a guest's.
+    expect(r).toEqual({ accepted: 4, rejected: 2 });
+    expect(db.boards().runs.map((x) => x.name)).toEqual(['Hudson', 'Guest (iPhone · Safari)']);
+  });
+
+  it('only shows device labels and maps the game makes', () => {
+    db = openScores(':memory:');
+    const uas: Array<[string, number, boolean]> = [
+      ['Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1', 5, false],
+      ['Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15', 5, true],
+      ['Mozilla/5.0 (Linux; Android 14; SM-S911B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/24.0 Chrome/117.0.0.0 Mobile Safari/537.36', 5, false],
+      ['Mozilla/5.0 (X11; CrOS x86_64 14541.0.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36', 0, false],
+      ['Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0', 0, false],
+      ['Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 OPR/105.0.0.0', 0, false],
+      ['Mozilla/5.0 (Macintosh; Intel Mac OS X 14.0; rv:120.0) Gecko/20100101 Firefox/120.0', 0, false],
+      ['Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36', 0, false],
+      ['curl/8.5.0', 0, false],
+    ];
+    const labels = uas.map(([ua, touch, home]) => deviceLabel(ua, touch, home));
+    labels.forEach((label, i) => {
+      const id = `run-labl-000${i}`;
+      db.sync({ device: { id: `device-label-000${i}`, fingerprint: 'abc', label }, events: [run(id), attempt(id, 1, 1, 100 - i)] });
+    });
+    db.sync({ device: { id: 'device-rude-0001', fingerprint: 'abc', label: 'Poop · Butt' }, events: [run('run-rude-0001'), attempt('run-rude-0001', 1, 1, 1)] });
+    expect(db.boards().runs.map((x) => x.name)).toEqual([...labels, 'Unknown device'].map((l) => `Guest (${l})`));
+
+    const maps = ENVIRONMENTS.map((e) => e.name);
+    const r = db.sync({ device: phone, events: [run('run-maps-0001'), ...maps.map((m, i) => attempt('run-maps-0001', i + 1, i + 1, 10, true, m)), attempt('run-maps-0001', 9, 9, 10, true, 'Poop Palace')] });
+    expect(r).toEqual({ accepted: maps.length + 1, rejected: 1 });
+    expect(db.boards().levels.map((l) => l.map)).toEqual(maps);
+  });
+
+  it('hides names saved before names were checked unless they are approved', () => {
+    const file = path.join(os.tmpdir(), `hr-old-names-${process.pid}.sqlite`);
+    onTestFinished(() => {
+      for (const ext of ['', '-wal', '-shm']) rmSync(file + ext, { force: true });
+    });
+    db = openScores(file);
+    db.sync({ device: phone, events: [run('run-oldn-0001', 'Hudson'), attempt('run-oldn-0001', 1, 1, 100), run('run-oldn-0002', 'Dad'), attempt('run-oldn-0002', 1, 1, 50)] });
+    const raw = new DatabaseSync(file);
+    raw.prepare('UPDATE runs SET player = ? WHERE id = ?').run('Stinky Butt', 'run-oldn-0002');
+    raw.close();
+    const { runs, career } = db.boards();
+    expect(runs.map((x) => x.name)).toEqual(['Hudson', 'Guest (iPhone · Safari)']);
+    expect(career.map((c) => c.name)).toEqual(['Hudson', 'Guest (iPhone · Safari)']);
   });
 });
 

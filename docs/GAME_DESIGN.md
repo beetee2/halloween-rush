@@ -112,6 +112,15 @@ carry client-made ids, so resending is harmless. A device may only add to or nam
   by name (case-insensitive); unnamed runs are grouped per device as "Guest (label)".
 - Names are cleaned the same way on both sides (whitespace collapsed, control characters
   removed, max 16 characters) and are always rendered as text.
+- Names are an allowlist, checked by `src/core/names.mjs` in the game and again by the host:
+  exactly one approved word (`nameList.mjs`: US Social Security baby names given to 1,000+
+  babies since 1935 or 100 in one year, minus rude/slang/slur look-alikes; plus family and
+  spooky words), case and accents ignored, optionally followed by a number of up to 4 digits.
+  A number is refused if it is rude itself (69, 420, 666, 88…) or if its digits, read as
+  look-alike letters (0=o, 1=i/l, 3=e, 4=a, 5=s, 7=t…), finish a rude word with the end of the
+  name. The results and game-over screens say which part to change. The host also only accepts
+  device labels and map names the game makes, and shows runs whose stored name no longer passes
+  as guests (`approved_name()` in the `run_names` view), so old rows need no migration.
 - **Device identity:** a random id per browser (`localStorage`) plus a fingerprint hash
   (browser, screen, GPU, language, time zone) and a label like "iPhone · Safari". The id is the
   identity; the fingerprint is kept only to recognise the same hardware.

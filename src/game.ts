@@ -7,6 +7,7 @@ import { emptyInventory, inventoryTotal } from './core/inventory';
 import type { SaveStore } from './core/persistence';
 import { Rng, randomSeed } from './core/rng';
 import { RunModel } from './core/run';
+import { approvedName, nameProblem } from './core/names.mjs';
 import { addScore, cleanName, DEFAULT_NAME } from './core/scoreboard';
 import { InputManager } from './input/input';
 import { newId } from './net/device';
@@ -440,8 +441,10 @@ export class Game {
 
   private saveLevelName(raw: string): void {
     if (!this.askingLevelName || this.run.phase !== 'levelComplete') return;
+    const typed = this.acceptName(raw, 'results');
+    if (typed === null) return;
     this.askingLevelName = false;
-    const name = this.nameRun(raw);
+    const name = this.nameRun(typed);
     this.audio.unlock();
     this.audio.play('candy');
     this.ui.showLevelNameSaved(this.run.levelIndex + 1, name);
@@ -475,8 +478,10 @@ export class Game {
   private saveScore(raw: string): void {
     const entry = this.pendingScore;
     if (!entry || this.run.phase !== 'gameOver') return;
+    const typed = this.acceptName(raw, 'gameOver');
+    if (typed === null) return;
     this.pendingScore = null;
-    const named = { ...entry, name: this.nameRun(raw) || DEFAULT_NAME };
+    const named = { ...entry, name: this.nameRun(typed) || DEFAULT_NAME };
     this.addLocalScore(named);
     const board = this.runBoard();
     const { board: runs, rank } = addScore(board.runs, named);
@@ -485,9 +490,21 @@ export class Game {
     this.ui.showSavedScore(this.boardsView(runs, board.shared, this.runId), rank);
   }
 
-  /** The player typed a name: it belongs to this whole run and is offered again next time. */
-  private nameRun(raw: string): string {
-    this.playerName = cleanName(raw);
+  /**
+   * The typed name if it may go on the scoreboard ('' if the box was left empty). Otherwise the
+   * name box stays up and says why, and this returns null.
+   */
+  private acceptName(raw: string, screen: 'results' | 'gameOver'): string | null {
+    const typed = cleanName(raw);
+    const problem = typed ? nameProblem(typed) : '';
+    if (!problem) return approvedName(typed);
+    this.ui.rejectName(screen, problem);
+    return null;
+  }
+
+  /** The player saved a name: it belongs to this whole run and is offered again next time. */
+  private nameRun(name: string): string {
+    this.playerName = name;
     this.runNamed = true;
     this.scores.record({ type: 'name', runId: this.runId, name: this.playerName });
     this.persist();

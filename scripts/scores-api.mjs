@@ -10,6 +10,7 @@
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { approvedName } from '../src/core/names.mjs';
 
 const NAME_MAX_CHARS = 16;
 const BOARD_SIZE = 10;
@@ -17,6 +18,10 @@ const MAX_BODY_BYTES = 256 * 1024;
 const MAX_EVENTS = 200;
 const ID = /^[A-Za-z0-9-]{8,64}$/;
 const FINGERPRINT = /^[a-z0-9]{1,32}$/;
+// Only text the game itself makes reaches the boards, whatever a client sends: device labels
+// as deviceLabel() in src/net/device.ts builds them, and the maps in src/render/environments.
+const LABEL = /^(iPhone|iPad|Android|Chromebook|Windows|Mac|Linux|Device) · (Edge|Samsung Internet|Opera|Firefox|Chrome|Safari|Browser|Home Screen)$/;
+const MAPS = new Set(['Haunted House', 'Graveyard', 'Spooky Forest', 'Pumpkin Patch', 'Haunted Carnival']);
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS devices (
@@ -47,11 +52,12 @@ CREATE TABLE IF NOT EXISTS attempts (
 DROP VIEW IF EXISTS run_totals;
 DROP VIEW IF EXISTS kept_attempts;
 DROP VIEW IF EXISTS run_names;
--- Who a run belongs to. Unnamed runs are grouped per device.
+-- Who a run belongs to. Unnamed runs are grouped per device, and so are names saved before
+-- names were checked that aren't approved (approved_name() is names.mjs, registered below).
 CREATE VIEW run_names AS
   SELECT r.id AS run_id, r.started_at, r.rowid AS seq,
-         CASE WHEN r.player <> '' THEN r.player ELSE 'Guest (' || d.label || ')' END AS name,
-         CASE WHEN r.player <> '' THEN 'p:' || lower(r.player) ELSE 'd:' || r.device_id END AS player_key
+         CASE WHEN approved_name(r.player) <> '' THEN r.player ELSE 'Guest (' || d.label || ')' END AS name,
+         CASE WHEN approved_name(r.player) <> '' THEN 'p:' || lower(r.player) ELSE 'd:' || r.device_id END AS player_key
   FROM runs r JOIN devices d ON d.id = r.device_id;
 -- The attempt that counts for each level of a run: Replay Level replaces the earlier ones,
 -- exactly like the in-game score.
@@ -79,6 +85,7 @@ export function openScores(file) {
   const db = new DatabaseSync(file);
   if (!memory) db.exec('PRAGMA journal_mode = WAL');
   db.exec('PRAGMA foreign_keys = ON');
+  db.function('approved_name', { deterministic: true }, (name) => approvedName(String(name)));
   db.exec(SCHEMA);
 
   const upsertDevice = db.prepare(
@@ -125,7 +132,8 @@ export function openScores(file) {
     if (e.type === 'run') {
       const runId = id(e.id);
       if (!runId) return false;
-      insertRun.run(runId, deviceId, typeof e.player === 'string' ? cleanName(e.player) : '', now);
+      // A name that isn't approved leaves the run as a guest's rather than losing it.
+      insertRun.run(runId, deviceId, typeof e.player === 'string' ? approvedName(cleanName(e.player)) : '', now);
       return runOwner.get(runId)?.device_id === deviceId;
     }
     const runId = id(e.runId);
@@ -135,14 +143,15 @@ export function openScores(file) {
       const attempt = int(e.attempt, 1, 1e6);
       const level = int(e.level, 1, 1e4);
       const score = int(e.score, 0, 1e6);
-      const map = typeof e.map === 'string' ? cleanName(e.map, 32) : '';
-      if (attempt === null || level === null || score === null || !map || typeof e.completed !== 'boolean') return false;
-      insertAttempt.run(runId, attempt, level, map, score, e.completed ? 1 : 0, now);
+      if (attempt === null || level === null || score === null || !MAPS.has(e.map) || typeof e.completed !== 'boolean') return false;
+      insertAttempt.run(runId, attempt, level, e.map, score, e.completed ? 1 : 0, now);
       return true;
     }
     if (e.type === 'name') {
       if (typeof e.name !== 'string') return false;
-      const name = cleanName(e.name);
+      const typed = cleanName(e.name);
+      const name = approvedName(typed);
+      if (typed && !name) return false;
       nameRun.run(name, runId);
       if (name) nameDevice.run(name, deviceId);
       return true;
@@ -159,7 +168,7 @@ export function openScores(file) {
       if (!deviceId) return { error: 'A device id is required.' };
       if (!Array.isArray(b.events) || b.events.length > MAX_EVENTS) return { error: `Send up to ${MAX_EVENTS} events at a time.` };
       const fingerprint = typeof device.fingerprint === 'string' && FINGERPRINT.test(device.fingerprint) ? device.fingerprint : '';
-      const label = (typeof device.label === 'string' ? cleanName(device.label, 40) : '') || 'Unknown device';
+      const label = typeof device.label === 'string' && LABEL.test(device.label) ? device.label : 'Unknown device';
       const now = Date.now();
       let accepted = 0;
       db.exec('BEGIN');

@@ -1,6 +1,6 @@
 import { CONFIG } from '../config';
 import type { Bests, ScoreEntry, Settings } from '../types';
-import { cleanName, DEFAULT_NAME } from './scoreboard';
+import { DEFAULT_NAME, scoreboardName } from './scoreboard';
 
 export interface SaveData {
   settings: Settings;
@@ -42,7 +42,8 @@ function scoreboard(v: unknown): ScoreEntry[] {
     const score = Math.floor(num(e.score, 0, 0, 1e9));
     if (score <= 0) continue;
     const entry: ScoreEntry = {
-      name: (typeof e.name === 'string' ? cleanName(e.name) : '') || DEFAULT_NAME,
+      // Names saved before they were checked are only kept if they're approved.
+      name: e.name === LEGACY_NAME ? LEGACY_NAME : (typeof e.name === 'string' ? scoreboardName(e.name) : '') || DEFAULT_NAME,
       score,
       level: Math.floor(num(e.level, 0, 0, 1e6)),
     };
@@ -79,7 +80,7 @@ export function sanitize(raw: unknown): SaveData {
     },
     bests,
     scoreboard: board,
-    playerName: typeof root.playerName === 'string' ? cleanName(root.playerName) : '',
+    playerName: typeof root.playerName === 'string' ? scoreboardName(root.playerName) : '',
     levelBests: levelBests(root.levelBests),
   };
 }
