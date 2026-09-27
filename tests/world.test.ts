@@ -93,6 +93,30 @@ describe('projectiles and hits', () => {
     expect(world.projectiles.length).toBe(0);
   });
 
+  it('adds the range bonus by distance from the eye to where the shot lands', () => {
+    const { mediumFromM, farFromM, bonus } = CONFIG.range;
+    const base = CONFIG.points.medium;
+    // A sucker straight ahead at each depth. The shot lands ~0.84 m short of its centre
+    // (sucker radius + pumpkin radius), which the last case relies on.
+    const cases = [
+      { z: -(mediumFromM - 3), points: base + bonus.near },
+      { z: -(mediumFromM + farFromM) / 2, points: base + bonus.medium },
+      { z: -(farFromM + 3), points: base + bonus.far },
+      { z: -(mediumFromM + 0.3), points: base + bonus.near }, // centre past the line, hit short of it
+    ];
+    for (const { z, points } of cases) {
+      const layout = openLayout();
+      layout.candySpots = [{ x: 0, z }];
+      const { world, run, log } = setup(0, layout);
+      world.spawningEnabled = false;
+      const sucker = world.spawn('sucker')!;
+      stepFor(world, run, 1.2);
+      world.fire(muzzle(), aimAt(sucker), run);
+      stepFor(world, run, 0.8);
+      expect(log.hits, `sucker at z = ${z}`).toEqual([{ kind: 'sucker', points }]);
+    }
+  });
+
   it('solid scenery stops the shot before a target behind it', () => {
     const layout = openLayout();
     layout.blockers.push({ min: { x: -3, y: 0, z: -7 }, max: { x: 3, y: 5, z: -6.5 } });
