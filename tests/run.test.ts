@@ -278,3 +278,42 @@ describe('checkpoints: replay, next level, new run', () => {
     expect(run.nextLevel()).toBe(false);
   });
 });
+
+describe('shot log and accuracy', () => {
+  it('records every shot while playing, with its time and aim, and marks the one that hit', () => {
+    const run = new RunModel();
+    expect(run.fireShot(0, 0)).toBeNull(); // title
+    startPlaying(run);
+    playFor(run, 1.5);
+    const miss = run.fireShot(0.25, -0.1)!;
+    const hit = run.fireShot(0.3, 0.05)!;
+    const pts = pointsFor('witch', 'medium', 'far');
+    expect(run.awardHit('witch', 'medium', 'far', hit)).toBe(pts);
+    expect(miss).toEqual({ ms: 1500, yaw: 0.25, pitch: -0.1, target: null, zone: null, points: 0 });
+    expect(hit).toMatchObject({ ms: 1500, target: 'witch', zone: 'far', points: pts });
+    expect(run.shots).toEqual([miss, hit]);
+    expect(run.levelHits).toBe(1);
+    // A shot only ever counts as one hit.
+    run.awardHit('spider', 'small', 'near', hit);
+    expect(hit.target).toBe('witch');
+    expect([run.runShots, run.runHits]).toEqual([2, 1]);
+  });
+
+  it('starts each level attempt with an empty log; run accuracy keeps every attempt, replays included', () => {
+    const run = new RunModel();
+    startPlaying(run);
+    run.awardHit('frankenstein', 'large', 'near', run.fireShot(0, 0));
+    run.fireShot(0, 0);
+    completeLevel(run);
+    expect(run.fireShot(0, 0)).toBeNull(); // level over
+    expect(run.replayLevel()).toBe(true);
+    expect(run.shots).toEqual([]);
+    run.sceneReady();
+    finishCountdown(run);
+    run.fireShot(0, 0);
+    expect([run.shots.length, run.levelHits, run.runShots, run.runHits]).toEqual([1, 0, 3, 1]);
+    run.pause();
+    expect(run.startNewRun()).toBe(true);
+    expect([run.shots.length, run.runShots, run.runHits]).toEqual([0, 0, 0]);
+  });
+});

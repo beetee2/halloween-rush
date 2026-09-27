@@ -532,6 +532,36 @@ h2 {
   min-height: 1em;
 }
 
+.title-error {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 2px solid rgba(255, 77, 109, 0.6);
+  background: rgba(0, 0, 0, 0.3);
+  text-align: left;
+}
+
+.title-error p {
+  margin: 0;
+  font-weight: 800;
+}
+
+.title-error ul {
+  margin: 0;
+  padding-left: 1.2em;
+  font-size: 14px;
+  opacity: 0.85;
+}
+
+.title-link,
+.noscript a {
+  color: #ffd23a;
+  font-size: 14px;
+  font-weight: 700;
+}
+
 .btn {
   font: 800 17px var(--font);
   padding: 11px 18px;
@@ -541,6 +571,7 @@ h2 {
   cursor: pointer;
   color: var(--ink);
   touch-action: manipulation;
+  transition: opacity 0.2s;
 }
 
 .btn.primary {
@@ -569,6 +600,16 @@ h2 {
 .icon-btn:focus-visible {
   outline: 3px solid #7dff9a;
   outline-offset: 2px;
+}
+
+/* Just after a level or run ends: buttons ignore the pointer for a moment (UI.lockClicks). */
+.screen.click-lock button,
+.screen.click-lock input {
+  pointer-events: none;
+}
+
+.screen.click-lock .btn {
+  opacity: 0.5;
 }
 
 .btn-row {
@@ -621,7 +662,7 @@ h2 {
   gap: 10px;
 }
 
-/* Scoreboard / Career / Level bests tabs (game over and the Leaderboards screen). */
+/* Scoreboard / Career / Maps / Level bests tabs (game over and the Leaderboards screen). */
 .boards {
   display: flex;
   flex-direction: column;
@@ -634,7 +675,7 @@ h2 {
 
 .tabs {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 4px;
 }
 
@@ -669,6 +710,23 @@ h2 {
 
 .boards-card {
   width: min(560px, 100%);
+}
+
+/* Maps tab: a heading and a top 10 per map. */
+.map-boards {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.map-name {
+  margin: 6px 0 2px;
+  font-size: 13px;
+  color: #ffd23a;
+}
+
+.map-name:first-child {
+  margin-top: 0;
 }
 
 .scoreboard {
@@ -896,8 +954,12 @@ h2 {
   position: absolute;
   inset: 0;
   display: grid;
-  place-items: center;
+  place-content: center;
+  padding: 24px;
+  background: rgba(26, 15, 38, 0.96);
   font-size: 20px;
+  text-align: center;
+  z-index: 60;
 }
 
 @media (max-height: 460px) {

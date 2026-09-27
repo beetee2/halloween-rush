@@ -1,0 +1,157 @@
+/* The About / how-to-play page: a normal scrolling document in the game's colors. */
+:root {
+  --orange: #ff8a1c;
+  --orange-deep: #e5620b;
+  --green: #7ed957;
+  --gold: #ffd23a;
+  --cream: #fff4dc;
+  --ink: #1a0f26;
+  --card: rgba(30, 14, 48, 0.9);
+  --font: 'Trebuchet MS', 'Segoe UI Rounded', 'Arial Rounded MT Bold', 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: radial-gradient(ellipse at top, #3d1c63, var(--ink) 60%) fixed var(--ink);
+  color: var(--cream);
+  font: 17px/1.55 var(--font);
+}
+
+a {
+  color: var(--gold);
+}
+
+.top {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: calc(10px + env(safe-area-inset-top, 0px)) 16px 10px;
+  background: rgba(26, 15, 38, 0.92);
+  border-bottom: 1px solid rgba(255, 138, 28, 0.35);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--orange);
+  font-size: 20px;
+  font-weight: 900;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.brand img {
+  border-radius: 8px;
+}
+
+main {
+  padding: 0 16px;
+}
+
+article {
+  max-width: 760px;
+  margin: 24px auto;
+  padding: 8px 24px 24px;
+  border-radius: 22px;
+  background: var(--card);
+  border: 2px solid rgba(255, 138, 28, 0.5);
+}
+
+h1 {
+  margin: 16px 0 8px;
+  font-size: clamp(28px, 6vw, 42px);
+  line-height: 1.1;
+  color: var(--orange);
+}
+
+h2 {
+  margin: 32px 0 8px;
+  font-size: 26px;
+  color: var(--orange);
+}
+
+h3 {
+  margin: 20px 0 4px;
+  font-size: 18px;
+  color: var(--green);
+}
+
+.lead {
+  font-size: 19px;
+}
+
+li + li {
+  margin-top: 6px;
+}
+
+.btn {
+  display: inline-block;
+  padding: 8px 16px;
+  border-radius: 14px;
+  border: 2px solid #ffd08a;
+  background: linear-gradient(#ffb04a, var(--orange));
+  box-shadow: 0 4px 0 var(--orange-deep);
+  color: var(--ink);
+  font-weight: 800;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.btn.big {
+  padding: 12px 22px;
+  font-size: 20px;
+}
+
+.btn:focus-visible,
+a:focus-visible {
+  outline: 3px solid #7dff9a;
+  outline-offset: 2px;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  padding: 8px 10px;
+  text-align: left;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+th {
+  color: var(--gold);
+}
+
+td:nth-child(2) {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+footer {
+  padding: 8px 16px calc(24px + env(safe-area-inset-bottom, 0px));
+  text-align: center;
+  font-size: 15px;
+  opacity: 0.85;
+}
+
+@media (max-width: 520px) {
+  article {
+    padding: 4px 16px 16px;
+  }
+}

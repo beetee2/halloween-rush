@@ -1,7 +1,10 @@
 {
+  "id": "./",
   "name": "Halloween Rush",
   "short_name": "Halloween Rush",
-  "description": "A spooky-but-fun 3D pumpkin shooting gallery.",
+  "description": "A free, spooky-but-fun 3D Halloween shooting game: splat silly monsters with a pumpkin launcher across five spooky places.",
+  "lang": "en",
+  "categories": ["games", "entertainment"],
   "start_url": "./",
   "scope": "./",
   "display": "fullscreen",

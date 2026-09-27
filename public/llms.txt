@@ -1,0 +1,22 @@
+# Halloween Rush
+
+> Halloween Rush is a free, first-person 3D Halloween shooting game that runs in any modern web browser at https://halloweenrush.app/. Players aim a pumpkin rocket launcher, splat silly monsters and candy targets for 60 seconds per level, shoot down the spiders' jack-o'-lanterns before they cost a heart, and teleport through five spooky places. No download, no account, no ads.
+
+Key facts:
+
+- Genre: Halloween shooting gallery (arcade, casual, single player). Spooky but fun: bright colors, cartoon monsters, no blood or gore.
+- Platforms: desktop and mobile web browsers with JavaScript and WebGL (Chrome, Edge, Firefox, Safari). Can be added to a phone's Home Screen.
+- Controls: mouse to aim, click/hold or Space/F to fire, Esc or P to pause. On touch screens: drag to aim, hold the FIRE button.
+- Rules: each level lasts 60 seconds and starts with 3 hearts. A jack-o'-lantern thrown by a spider that reaches the player costs a heart; losing all three ends the run.
+- Points: candy corn 100, witch 75, spider 50 (big spider 25), incoming jack-o'-lantern 25, sucker 25, Frankenstein 10. Range bonus +5 from 12 m, +10 from 18 m.
+- Levels: Haunted House, Graveyard, Spooky Forest, Pumpkin Patch, Haunted Carnival; then the cycle repeats as Night 2, Night 3 and so on, getting harder until level 13.
+- Price: free to play, no in-game purchases.
+
+## Pages
+
+- [Play Halloween Rush](https://halloweenrush.app/): the game itself
+- [How to play Halloween Rush and FAQ](https://halloweenrush.app/about/): controls, targets and points, levels, leaderboards and common questions
+
+## Optional
+
+- [Source code](https://github.com/beetee2/halloween-rush): TypeScript, Three.js and Vite; all models, textures and sounds are generated in code

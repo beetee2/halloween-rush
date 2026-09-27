@@ -2,10 +2,22 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "halloween-rush",
   "compatibility_date": "2026-09-25",
+  // Only the scores API (/api/*) runs this Worker; everything else is served from dist/.
+  "main": "worker/index.mjs",
   "assets": {
     "directory": "./dist",
-    "not_found_handling": "single-page-application"
+    // Unknown URLs get dist/404.html with a real 404 status, so search engines never index them as copies of the game.
+    "not_found_handling": "404-page",
+    "run_worker_first": ["/api/*"]
   },
+  // Shared leaderboards. No database_id: wrangler creates the database on the first deploy
+  // (automatic provisioning) and keeps using it on later deploys.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "halloween-rush-scores"
+    }
+  ],
   "observability": {
     "logs": {
       "enabled": true,

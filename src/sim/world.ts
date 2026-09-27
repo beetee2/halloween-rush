@@ -7,7 +7,7 @@ import { rangeZone, type RunModel } from '../core/run';
 import type { EnvironmentLayout } from '../render/environments/common';
 import { materials } from '../render/materials';
 import type { ModelLibrary } from '../render/models/characters';
-import type { TargetKind } from '../types';
+import type { ShotRecord, TargetKind } from '../types';
 import {
   CandyCornTarget,
   FrankTarget,
@@ -36,6 +36,8 @@ export interface Projectile {
   traveled: number;
   mesh: THREE.Mesh;
   spin: THREE.Vector3;
+  /** The run's record of this shot, marked as a hit when it lands on a target. */
+  shot: ShotRecord | null;
 }
 
 export type SpawnKind = 'frankenstein' | 'witch' | 'spider' | 'candyCorn' | 'sucker';
@@ -199,7 +201,7 @@ export class World {
    * Launch a pumpkin from the muzzle toward the crosshair aim point. A target sitting
    * between the eye and the muzzle (point blank) is hit immediately.
    */
-  fire(muzzle: THREE.Vector3, aimPoint: THREE.Vector3, run: RunModel): Projectile | null {
+  fire(muzzle: THREE.Vector3, aimPoint: THREE.Vector3, run: RunModel, shot: ShotRecord | null = null): Projectile | null {
     this.run = run;
     if (this.projectiles.length >= CONFIG.weapon.maxActiveProjectiles) {
       const oldest = this.projectiles.shift();
@@ -219,11 +221,12 @@ export class World {
       traveled: 0,
       mesh,
       spin: new THREE.Vector3(this.rng.range(8, 14), this.rng.range(-4, 4), 0),
+      shot,
     };
     // Point-blank: the launcher barrel occupies eye→muzzle, so test that segment first.
     const hit = this.firstTargetHit(this.eye, muzzle, CONFIG.weapon.projectileRadius);
     if (hit) {
-      this.registerHit(hit.target, muzzle.clone());
+      this.registerHit(hit.target, muzzle.clone(), shot);
       this.releaseProjectile(proj);
       return null;
     }
@@ -268,10 +271,10 @@ export class World {
     return best;
   }
 
-  private registerHit(target: Target, point: THREE.Vector3): void {
+  private registerHit(target: Target, point: THREE.Vector3, shot: ShotRecord | null): void {
     target.hit();
     const zone = rangeZone(point.distanceTo(this.eye));
-    const points = this.run ? this.run.awardHit(target.kind, target.size, zone) : 0;
+    const points = this.run ? this.run.awardHit(target.kind, target.size, zone, shot) : 0;
     this.events.targetHit?.(target, point, points);
   }
 
@@ -298,7 +301,7 @@ export class World {
       const sceneryT = this.firstSceneryHit(p.pos, p1);
       if (targetHit && (sceneryT === null || targetHit.t <= sceneryT)) {
         const point = p.pos.clone().lerp(p1, targetHit.t);
-        this.registerHit(targetHit.target, point);
+        this.registerHit(targetHit.target, point, p.shot);
         this.removeProjectile(i);
         continue;
       }

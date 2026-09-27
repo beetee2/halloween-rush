@@ -1,11 +1,12 @@
-import type { CareerRow, LevelRow } from '../net/scoreSync';
+import { accuracy } from '../core/scoreboard';
+import type { CareerRow, LevelRow, MapRow } from '../net/scoreSync';
 import type { ScoreEntry } from '../types';
 
-export type BoardTab = 'runs' | 'career' | 'levels';
+export type BoardTab = 'runs' | 'career' | 'maps' | 'levels';
 
 export interface BoardsView {
   runs: readonly ScoreEntry[];
-  /** The runs came from the host (everyone on the network), not just this device. */
+  /** The runs came from the host (everyone who plays there), not just this device. */
   shared: boolean;
   /** Run to highlight: the one that just ended. */
   highlight: string | null;
@@ -13,20 +14,28 @@ export interface BoardsView {
   pendingName: string | null;
   /** Host-only boards; null when the host can't be reached. */
   career: readonly CareerRow[] | null;
+  /** Top 10 finished levels per map, grouped by map in play order. */
+  maps: readonly MapRow[] | null;
   levels: readonly LevelRow[] | null;
 }
 
 const TABS: ReadonlyArray<[BoardTab, string]> = [
   ['runs', 'Scoreboard'],
   ['career', 'Career'],
+  ['maps', 'Maps'],
   ['levels', 'Level bests'],
 ];
 
-const OFFLINE = "This shows up when this device can reach the game host (the computer running serve:lan).";
+const OFFLINE = "This shows up when this device can reach the game's scores server.";
 
 const fmt = (n: number) => Math.round(n).toLocaleString('en-US');
 /** "Haunted House" → "House", "Pumpkin Patch" → "Patch". */
 const shortMap = (map: string) => map.split(' ').at(-1) ?? map;
+/** " · 62%", or nothing before the first recorded shot. */
+const hitRate = (hits = 0, shots = 0) => {
+  const pct = accuracy(hits, shots);
+  return pct === null ? '' : ` · ${pct}%`;
+};
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text = ''): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
@@ -35,11 +44,12 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, te
   return e;
 }
 
-/** Scoreboard / Career / Level bests, as tabs. Names are always set as text, never HTML. */
+/** Scoreboard / Career / Maps / Level bests, as tabs. Names are always set as text, never HTML. */
 export class BoardPanel {
   private tab: BoardTab = 'runs';
   private readonly tabs = new Map<BoardTab, HTMLButtonElement>();
-  private readonly lists = new Map<BoardTab, HTMLOListElement>();
+  /** One list per tab; Maps holds a heading and a list per map instead. */
+  private readonly lists = new Map<BoardTab, HTMLElement>();
   private readonly note: HTMLElement;
   private view: BoardsView | null = null;
   /** Name cell of the highlighted row while it waits for a name; mirrors the name box. */
@@ -55,7 +65,7 @@ export class BoardPanel {
       b.addEventListener('click', () => this.select(id));
       bar.append(b);
       this.tabs.set(id, b);
-      const list = el('ol', id === 'levels' ? 'scoreboard' : 'scoreboard ranked');
+      const list = id === 'maps' ? el('div', 'map-boards') : el('ol', id === 'levels' ? 'scoreboard' : 'scoreboard ranked');
       list.setAttribute('aria-label', label);
       this.lists.set(id, list);
     }
@@ -75,6 +85,7 @@ export class BoardPanel {
     this.view = v;
     this.renderRuns(v);
     this.renderCareer(v.career);
+    this.renderMaps(v.maps);
     this.renderLevels(v.levels);
     this.updateNote();
   }
@@ -82,8 +93,9 @@ export class BoardPanel {
   private updateNote(): void {
     const v = this.view;
     const text: Record<BoardTab, string> = {
-      runs: v?.shared ? 'Best runs by everyone on this network' : 'Best runs on this device',
-      career: v?.career ? 'Most points over every game · average points per level on each map' : '',
+      runs: v?.shared ? 'Best runs by everyone who plays here' : 'Best runs on this device',
+      career: v?.career ? 'Most points over every game · accuracy · average points per level on each map' : '',
+      maps: v?.maps ? 'Best 10 finished levels on each map · accuracy' : '',
       levels: v?.levels ? 'Best score for finishing each level' : '',
     };
     this.note.textContent = text[this.tab];
@@ -99,7 +111,7 @@ export class BoardPanel {
     const rows = v.runs.map((s, i) => {
       const li = el('li', '');
       const name = el('span', 'name', s.name);
-      li.append(el('span', 'rank', String(i + 1)), name, el('span', 'lvl', s.level > 0 ? `Lv ${s.level}` : ''), el('b', '', fmt(s.score)));
+      li.append(el('span', 'rank', String(i + 1)), name, el('span', 'lvl', s.level > 0 ? `Lv ${s.level}${hitRate(s.hits, s.shots)}` : ''), el('b', '', fmt(s.score)));
       if (v.highlight !== null && s.runId === v.highlight) {
         li.className = 'you';
         if (v.pendingName !== null) {
@@ -117,7 +129,7 @@ export class BoardPanel {
     const rows = career.map((c, i) => {
       const li = el('li', 'career');
       const who = el('div', 'who');
-      const games = `${fmt(c.games)} ${c.games === 1 ? 'game' : 'games'} · best ${fmt(c.best)} · Lv ${c.furthest}`;
+      const games = `${fmt(c.games)} ${c.games === 1 ? 'game' : 'games'} · best ${fmt(c.best)} · Lv ${c.furthest}${hitRate(c.hits, c.shots)}`;
       const maps = c.maps.length ? `Avg/map: ${c.maps.map((m) => `${shortMap(m.map)} ${fmt(m.avg)}`).join(' · ')}` : '';
       who.append(el('span', 'name', c.name), el('span', 'detail', games));
       if (maps) who.append(el('span', 'detail maps', maps));
@@ -125,6 +137,31 @@ export class BoardPanel {
       return li;
     });
     this.fill('career', rows, 'No games yet.');
+  }
+
+  private renderMaps(maps: readonly MapRow[] | null): void {
+    const box = this.lists.get('maps')!;
+    const empty = (text: string) => {
+      const list = el('ol', 'scoreboard');
+      list.append(el('li', 'empty', text));
+      box.replaceChildren(list);
+    };
+    if (!maps) return empty(OFFLINE);
+    if (!maps.length) return empty('No levels finished yet.');
+    const sections: HTMLElement[] = [];
+    for (const map of new Set(maps.map((m) => m.map))) {
+      const list = el('ol', 'scoreboard ranked');
+      list.setAttribute('aria-label', `${map} top 10`);
+      maps
+        .filter((m) => m.map === map)
+        .forEach((m, i) => {
+          const li = el('li', '');
+          li.append(el('span', 'rank', String(i + 1)), el('span', 'name', m.name), el('span', 'lvl', `Lv ${m.level}${hitRate(m.hits, m.shots)}`), el('b', '', fmt(m.score)));
+          list.append(li);
+        });
+      sections.push(el('h3', 'map-name', map), list);
+    }
+    box.replaceChildren(...sections);
   }
 
   private renderLevels(levels: readonly LevelRow[] | null): void {
