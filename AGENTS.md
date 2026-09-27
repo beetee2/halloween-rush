@@ -27,6 +27,11 @@ Run `npm run typecheck` and `npm test` before finishing any change.
 - Dev servers write scores to `data/dev-scores.sqlite`; `serve:lan` uses the real household
   file `data/halloween-rush.sqlite`. Never touch the real one in tests.
 - Test hooks (`__HR__`, `installTestHooks`) must stay out of the production bundle.
+- Search engines render without WebGL. The no-WebGL path (`UI.showError`) must keep the title
+  card visible; don't turn it back into a separate error screen.
+- The production origin `https://halloweenrush.app` is hardcoded in `index.html`,
+  `about/index.html` and `public/{robots.txt,sitemap.xml,llms.txt}`; `tests/seo.test.ts` checks
+  they agree. A new indexable page needs a Vite input, a sitemap entry and a `PAGES` entry there.
 
 ## Where things live
 
@@ -39,7 +44,9 @@ Run `npm run typecheck` and `npm test` before finishing any change.
 - `src/audio/audio.ts` — Web Audio synth. Add a sound by extending the `Sfx` union and the
   `play()` switch; spawn sounds per target kind are mapped in `SPAWN_SFX` in `src/game.ts`.
 - `src/ui/`, `src/input/`, `src/net/` — DOM screens, input, score sync with the host.
-- `scripts/` — LAN server, scores API (`node:sqlite`), icon generator.
+- `scripts/` — LAN server, scores API (`node:sqlite`), icon + link-preview image generator.
+- `about/index.html`, `src/ui/about.css` — plain-HTML About / how-to-play / FAQ page for search
+  engines and AI assistants; crawler files live in `public/`.
 
 ## Style
 

@@ -6,7 +6,8 @@ survive the spiders' jack-o'-lanterns, and teleport through five spooky places. 
 drops a miniature candy into the physical trick-or-treat bag beside you.
 
 Built with TypeScript (strict), Three.js and Vite. All models, textures and sounds are
-generated in code; the only files are the Home Screen icons. Gameplay runs entirely in each
+generated in code; the only image files are the icons and the link-preview card, rendered from
+code by `scripts/make-icons.mjs`. The public site is https://halloweenrush.app/. Gameplay runs entirely in each
 browser. The only thing sent over the network after loading is each finished level, which goes
 to a small **household scores database** (SQLite) on the computer hosting the game. That feeds
 the shared scoreboard, the career leaderboard and the level bests.
@@ -82,7 +83,8 @@ pages go fullscreen. The closest thing is adding the game to the Home Screen:
 A Home Screen copy keeps its own saved data, separate from the browser's. Its settings and
 personal best start fresh, and it counts as a separate device ("iPhone · Home Screen"). The
 shared leaderboards are unaffected because they live on the host. If you edit
-`public/icon.svg`, regenerate the PNG icons with `node scripts/make-icons.mjs`.
+`public/icon.svg`, regenerate the PNG icons, `favicon.ico` and the `og-image.png` link-preview
+card with `node scripts/make-icons.mjs`.
 
 ## Play on the local network
 
@@ -145,6 +147,22 @@ wait there and are sent later. Saves belong to one browser **and one address**:
 (and separate device IDs), and changing the port changes the origin too. Private browsing, blocked
 storage or a full quota never stops the game; it just won't remember anything.
 
+## Search engines, AI assistants and link previews
+
+- **Pages:** `/` is the game; `/about/` (`about/index.html`) is a plain-HTML guide with controls,
+  points, levels and an FAQ. It needs no JavaScript, so every search engine and AI assistant can
+  read it. Its FAQ structured data must match the visible FAQ word for word.
+- **Metadata:** both pages carry a title, description, canonical URL, Open Graph/Twitter tags and
+  schema.org JSON-LD (`VideoGame`, `WebSite`, `FAQPage`).
+- **Crawler files** in `public/`: `robots.txt` (everyone welcome, AI crawlers named explicitly),
+  `sitemap.xml`, `llms.txt` (a Markdown summary for AI tools) and `404.html`. Cloudflare serves
+  unknown URLs with that page and a real 404 status (`not_found_handling` in `wrangler.jsonc`).
+- **No WebGL:** search engines render pages without 3D graphics. The game then keeps its title
+  card on screen with the error inside it, so the indexed page still describes the game.
+- **Domain:** `https://halloweenrush.app` is written into both pages and the crawler files.
+  `tests/seo.test.ts` fails if any of them disagree. Update `<lastmod>` in `sitemap.xml` when a
+  page's content changes.
+
 ## Troubleshooting
 
 - **"Halloween Rush needs 3D graphics (WebGL)"**: turn on hardware/graphics acceleration in the
@@ -171,7 +189,8 @@ src/render/            renderer/stage, procedural models, five environments, lau
 src/input/ audio/ ui/  input (pointer lock, drag, touch), synthesized Web Audio, DOM screens/HUD/leaderboards
 src/net/               device ID + fingerprint, score outbox/sync with the host
 scripts/scores-api.mjs household scores database (node:sqlite) + JSON API, used by serve-lan and Vite
-public/                Home Screen icons and web app manifest
+public/                icons, link-preview image, web app manifest, robots.txt, sitemap.xml, llms.txt, 404 page
+about/index.html       the plain-HTML About / how-to-play / FAQ page
 src/game.ts            ties it together for one player's session
 tests/  e2e/  scripts/ unit tests, Playwright smoke tests, LAN server + verifier, icon renderer
 docs/                  GAME_DESIGN.md, IMPLEMENTATION_PLAN.md, VERIFICATION.md

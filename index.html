@@ -11,9 +11,63 @@
     <meta name="apple-mobile-web-app-title" content="Halloween Rush" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <meta name="description" content="Halloween Rush: a spooky-but-fun 3D pumpkin shooting gallery." />
-    <title>Halloween Rush</title>
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cellipse cx='32' cy='38' rx='26' ry='21' fill='%23ff7a18'/%3E%3Crect x='29' y='8' width='6' height='12' rx='2' fill='%234d7a2a'/%3E%3Cpath d='M18 32l6-8 6 8zM34 32l6-8 6 8zM20 44q12 10 24 0l-4 3-4-3-4 3-4-3-4 3z' fill='%23332'/%3E%3C/svg%3E" />
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <!-- Search and social previews. Absolute URLs use the production origin; tests/seo.test.ts keeps them in sync. -->
+    <title>Halloween Rush – Free 3D Halloween Shooting Game Online</title>
+    <meta name="description" content="Play Halloween Rush free in your browser: a spooky-but-fun 3D Halloween shooting game. Splat silly monsters with a pumpkin launcher across five levels." />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+    <link rel="canonical" href="https://halloweenrush.app/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Halloween Rush" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:url" content="https://halloweenrush.app/" />
+    <meta property="og:title" content="Halloween Rush – Free 3D Halloween Shooting Game" />
+    <meta property="og:description" content="Splat silly monsters with a pumpkin launcher, dodge the spiders' jack-o'-lanterns and teleport through five spooky places. Free, in your browser, no download." />
+    <meta property="og:image" content="https://halloweenrush.app/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Halloween Rush, free 3D Halloween shooting game: a glowing jack-o'-lantern under a full moon" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Halloween Rush – Free 3D Halloween Shooting Game" />
+    <meta name="twitter:description" content="Splat silly monsters with a pumpkin launcher and survive five spooky levels. Free, in your browser." />
+    <meta name="twitter:image" content="https://halloweenrush.app/og-image.png" />
+    <meta name="twitter:image:alt" content="Halloween Rush, free 3D Halloween shooting game: a glowing jack-o'-lantern under a full moon" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebSite",
+            "@id": "https://halloweenrush.app/#website",
+            "url": "https://halloweenrush.app/",
+            "name": "Halloween Rush",
+            "alternateName": "Halloween Rush game",
+            "inLanguage": "en"
+          },
+          {
+            "@type": "VideoGame",
+            "@id": "https://halloweenrush.app/#game",
+            "name": "Halloween Rush",
+            "url": "https://halloweenrush.app/",
+            "isPartOf": { "@id": "https://halloweenrush.app/#website" },
+            "description": "Halloween Rush is a free first-person 3D Halloween shooting gallery that runs in the web browser. Aim a pumpkin rocket launcher, splat silly monsters and candy targets for 60 seconds per level, shoot down the spiders' jack-o'-lanterns before they cost a heart, and teleport through five spooky places: Haunted House, Graveyard, Spooky Forest, Pumpkin Patch and Haunted Carnival.",
+            "image": "https://halloweenrush.app/og-image.png",
+            "genre": ["Shooter", "Arcade", "Casual"],
+            "keywords": "Halloween game, Halloween games, free Halloween game, Halloween shooting game, pumpkin game, browser game, 3D shooting gallery",
+            "gamePlatform": ["Web browser", "Desktop", "Mobile"],
+            "applicationCategory": "GameApplication",
+            "operatingSystem": "Any",
+            "browserRequirements": "Requires JavaScript and WebGL",
+            "playMode": "SinglePlayer",
+            "inLanguage": "en",
+            "isAccessibleForFree": true,
+            "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD", "availability": "https://schema.org/InStock" },
+            "subjectOf": { "@id": "https://halloweenrush.app/about/#faq" }
+          }
+        ]
+      }
+    </script>
     <link rel="stylesheet" href="/src/ui/styles.css" />
   </head>
   <body>
@@ -60,7 +114,13 @@
       <section id="screen-title" class="screen" aria-labelledby="title-heading">
         <div class="card title-card">
           <h1 id="title-heading" class="logo"><span>Halloween</span> <span>Rush</span></h1>
-          <p class="tagline">Pumpkin-powered spooky shooting gallery</p>
+          <p class="tagline">A free, pumpkin-powered Halloween shooting gallery</p>
+          <!-- Shown instead of Start when 3D can't run. The title stays up so the page still says what the game is. -->
+          <div id="title-error" class="title-error" hidden role="alert">
+            <p id="error-msg"></p>
+            <ul id="error-tips"></ul>
+            <button id="btn-reload" class="btn primary" type="button">Reload</button>
+          </div>
           <button id="btn-start" class="btn primary big" type="button">Start the Rush</button>
           <div class="how">
             <div class="how-desktop"><b>Computer:</b> move the mouse to aim · click or hold to fire (Space works too) · Esc to pause</div>
@@ -68,10 +128,11 @@
             <div>Survive 60 seconds with 3 hearts. Small targets score more. Shoot the spiders' jack-o'-lanterns before they reach you!</div>
           </div>
           <div class="bests" id="title-bests"></div>
-          <div class="btn-row">
+          <div class="btn-row" id="title-actions">
             <button id="btn-boards" class="btn ghost" type="button">Leaderboards</button>
             <button id="btn-settings-title" class="btn ghost" type="button">Settings</button>
           </div>
+          <a class="title-link" href="about/">About Halloween Rush · how to play · FAQ</a>
         </div>
       </section>
 
@@ -162,22 +223,17 @@
         </div>
       </section>
 
-      <!-- Fatal error -->
-      <section id="screen-error" class="screen" hidden role="alert">
-        <div class="card">
-          <h2>Halloween Rush can't start</h2>
-          <p id="error-msg"></p>
-          <ul class="sub" id="error-tips"></ul>
-          <button id="btn-reload" class="btn primary" type="button">Reload</button>
-        </div>
-      </section>
-
       <div id="rotate" hidden role="alert">
         <svg viewBox="0 0 64 64" aria-hidden="true"><rect x="20" y="8" width="24" height="44" rx="4" fill="none" stroke="#ffd23a" stroke-width="4" /><path d="M50 40a18 18 0 0 1-18 18" fill="none" stroke="#ff8a1c" stroke-width="4" /><path d="M28 54l4 4 4-4" fill="none" stroke="#ff8a1c" stroke-width="4" /></svg>
         <p>Turn your device sideways to play Halloween Rush</p>
       </div>
 
-      <noscript><div class="noscript">Halloween Rush needs JavaScript enabled.</div></noscript>
+      <noscript>
+        <div class="noscript">
+          <p><b>Halloween Rush</b> is a free 3D Halloween shooting game for the browser. It needs JavaScript enabled.</p>
+          <p><a href="about/">Read about the game, how to play and the FAQ</a></p>
+        </div>
+      </noscript>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

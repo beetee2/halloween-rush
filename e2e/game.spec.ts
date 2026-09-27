@@ -121,7 +121,7 @@ async function finishLevel(page: Page): Promise<void> {
 
 test('title renders Halloween Rush over a populated 3D scene', async ({ page }) => {
   const errors = await open(page);
-  await expect(page).toHaveTitle('Halloween Rush');
+  await expect(page).toHaveTitle(/^Halloween Rush/);
   await expect(page.locator('h1')).toHaveText(/Halloween\s+Rush/);
   await expect(page.locator('body')).not.toContainText('Pumpkin Panic');
   const stats = await page.evaluate(() => window.__HR__.pixelStats());

@@ -28,6 +28,10 @@ export default defineConfig({
   build: {
     target: 'es2022',
     chunkSizeWarningLimit: 900,
+    rolldownOptions: {
+      // The game, plus the plain-HTML About page search engines and AI assistants can read.
+      input: { main: 'index.html', about: 'about/index.html' },
+    },
   },
   test: {
     environment: 'node',

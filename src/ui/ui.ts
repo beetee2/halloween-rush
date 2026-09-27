@@ -4,7 +4,7 @@ import type { Bests, CandyKind, Inventory, SizeClass } from '../types';
 import { CANDY_KINDS } from '../types';
 import { BoardPanel, type BoardsView } from './boards';
 
-export type Screen = 'title' | 'pause' | 'results' | 'gameOver' | 'boards' | 'settings' | 'error' | null;
+export type Screen = 'title' | 'pause' | 'results' | 'gameOver' | 'boards' | 'settings' | null;
 
 export interface HudState {
   levelNumber: number;
@@ -61,7 +61,6 @@ export class UI {
       gameOver: $('screen-gameover'),
       boards: $('screen-boards'),
       settings: $('screen-settings'),
-      error: $('screen-error'),
     };
     const pops = $('popups');
     for (let i = 0; i < CONFIG.caps.maxScorePopups; i++) {
@@ -382,9 +381,14 @@ export class UI {
         return li;
       }),
     );
+    // Stay on the title card so the page still shows what the game is. Search engines render
+    // pages without WebGL and index what's left on screen.
+    $('title-error').hidden = false;
+    $('btn-start').hidden = true;
+    $('title-actions').hidden = true;
     this.setHudVisible(false);
     $('rotate').hidden = true;
-    this.show('error');
+    this.show('title');
   }
 
   setRotatePrompt(visible: boolean): void {
