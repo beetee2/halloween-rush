@@ -37,7 +37,10 @@ export function buildHauntedHouse(): Environment {
 
   // Lawn variation and the stone path to the porch.
   for (let i = 0; i < 18; i++) {
-    b.patch(-22 + rand() * 44, -4 - rand() * 26, 1.5 + rand() * 2.5, 1 + rand() * 1.5, rand() < 0.5 ? 0x3e5e36 : 0x2d472a, 0.008);
+    const [x, z, rx, rz] = [-22 + rand() * 44, -4 - rand() * 26, 1.5 + rand() * 2.5, 1 + rand() * 1.5];
+    // The two shades sit at different heights so overlapping patches never z-fight.
+    const light = rand() < 0.5;
+    b.patch(x, z, rx, rz, light ? 0x3e5e36 : 0x2d472a, light ? 0.008 : 0.012);
   }
   for (let i = 0; i < 7; i++) {
     b.box([1.5 + rand() * 0.3, 0.06, 1.0], 0x8a7f96, { pos: [-0.9 + (rand() - 0.5) * 0.3, 0.03, -3.5 - i * 1.55], rot: [0, (rand() - 0.5) * 0.3, 0] });
@@ -49,8 +52,9 @@ export function buildHauntedHouse(): Environment {
   // Horizontal siding lines
   for (let y = 0.6; y < 7; y += 0.7) b.box([11.04, 0.05, 6.04], SIDING_DARK, { pos: [0, y, hz] });
   b.blocker([-5.6, 0, hz - 3.1], [5.6, 10.6, hz + 3.1]);
-  // Crooked gable roof + trim
-  b.add(gableGeometry(11, 3.6, 6.6, 0.6), ROOF, { pos: [0, 7, hz], rot: [0, 0, 0.035] });
+  // Crooked gable roof + trim. Its front end stops just behind the tower's face (hz + 3.3):
+  // flush with it, the two z-fought at the right eave.
+  b.add(gableGeometry(11, 3.6, 6.5, 0.6), ROOF, { pos: [0, 7, hz], rot: [0, 0, 0.035] });
   b.box([12.4, 0.25, 0.3], TRIM, { pos: [0, 6.95, hz + 3.25], rot: [0, 0, 0.02] });
   // Attic round window in the gable
   b.add(new THREE.CylinderGeometry(0.75, 0.75, 0.12, 16), TRIM, { pos: [0, 8.45, hz + 3.34], rot: [Math.PI / 2, 0, 0] });
@@ -99,12 +103,13 @@ export function buildHauntedHouse(): Environment {
     for (let i = 0; i < 7; i++) b.box([0.07, 0.8, 0.07], 0xcfc4dc, { pos: [x0 + i * 0.42, 0.8, pz + 1.4] });
   }
   b.blocker([-4.8, 0, pz - 1.6], [3.6, 0.9, pz + 1.6]);
-  // Jack-o'-lanterns on the steps and porch.
-  b.pumpkin(-2.6, pz + 2.2, 0.38, true, 0.2);
+  // Jack-o'-lanterns on the steps and porch. Their glows sit just in front of them: a glow
+  // cutting through a pumpkin leaves its face half lit.
+  b.pumpkin(-2.6, pz + 2.0, 0.38, true, 0.2);
   b.pumpkin(1.0, pz + 2.1, 0.3, true, -0.3);
   b.pumpkin(-3.8, pz + 0.8, 0.45, true, 0.1);
   b.halo(-2.6, 0.4, pz + 2.5, 1.6, 0xffb040, 0.35);
-  b.halo(-3.8, 0.5, pz + 1.1, 1.8, 0xffb040, 0.35);
+  b.halo(-3.8, 0.5, pz + 1.3, 1.8, 0xffb040, 0.35);
 
   // ---------------------------------------------------------------- yard
   b.picketFence(-14, -6.8, -1.9, -6.6, FENCE, 1.05);

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { CONFIG } from '../../config';
 import type { Aabb } from '../../core/collision';
 import { PartBuilder, ResourceTracker, type PartOptions, type V3 } from '../builder';
 import { materials } from '../materials';
@@ -55,6 +56,8 @@ export interface SkyColors {
 }
 
 const unitBox = new THREE.BoxGeometry(1, 1, 1);
+const unitPlane = new THREE.PlaneGeometry(1, 1);
+const eyePoint = new THREE.Vector3(...CONFIG.camera.position);
 
 /**
  * Helper for authoring an environment: static props go into two merged vertex-coloured
@@ -335,15 +338,20 @@ export class EnvBuilder {
     return this;
   }
 
-  /** Additive glow sprite (lamps, windows, mushrooms). */
+  /**
+   * Additive glow card (lamps, windows, mushrooms). The eye never moves, so the card is
+   * turned to face it once. A sprite would re-orient with every aim change, and whatever
+   * part of it nearby geometry cuts off would pop in and out.
+   */
   halo(x: number, y: number, z: number, size: number, color: number, opacity = 0.5): this {
-    const mat = this.tracker.track(materials().halo.clone());
-    mat.color.set(color);
-    mat.opacity = opacity;
-    const s = new THREE.Sprite(mat);
-    s.position.set(x, y, z);
-    s.scale.setScalar(size);
-    this.group.add(s);
+    const mat = this.tracker.track(
+      new THREE.MeshBasicMaterial({ map: softDotTexture(), color, opacity, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
+    );
+    const card = new THREE.Mesh(unitPlane, mat);
+    card.position.set(x, y, z);
+    card.scale.setScalar(size);
+    card.lookAt(eyePoint);
+    this.group.add(card);
     return this;
   }
 
