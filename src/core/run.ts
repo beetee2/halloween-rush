@@ -1,5 +1,5 @@
 import { CONFIG, type GameConfig } from '../config';
-import { CANDY_FOR_TARGET, type Bests, type Inventory, type Phase, type RangeZone, type SizeClass, type TargetKind } from '../types';
+import { CANDY_FOR_TARGET, type Bests, type Inventory, type Phase, type RangeZone, type ShotRecord, type SizeClass, type TargetKind } from '../types';
 import { addInventories, cloneInventory, emptyInventory } from './inventory';
 
 export interface Snapshot {
@@ -47,6 +47,11 @@ export class RunModel {
   resultCommitted = false;
   /** Set when the last commit raised a personal best. */
   newBest = false;
+  /** Every shot of the current level attempt, in order. */
+  shots: ShotRecord[] = [];
+  /** Shots and hits over the whole run, replayed attempts included. */
+  runShots = 0;
+  runHits = 0;
   readonly bests: Bests;
 
   constructor(
@@ -71,6 +76,8 @@ export class RunModel {
     if (this.phase !== 'title' && this.phase !== 'gameOver' && this.phase !== 'paused') return false;
     this.levelIndex = 0;
     this.checkpoint = { score: 0, inventory: emptyInventory() };
+    this.runShots = 0;
+    this.runHits = 0;
     this.beginAttempt();
     return true;
   }
@@ -125,12 +132,32 @@ export class RunModel {
     return this.phase === 'playing';
   }
 
-  /** Award points + candy for a successful hit. Returns points awarded (0 if not playing). */
-  awardHit(kind: TargetKind, size: SizeClass, zone: RangeZone = 'near'): number {
+  get levelHits(): number {
+    return this.shots.filter((s) => s.target !== null).length;
+  }
+
+  /** A pumpkin left the launcher. Returns its record so a hit can be filled in later (null if not playing). */
+  fireShot(yaw: number, pitch: number): ShotRecord | null {
+    if (!this.acceptsCombat) return null;
+    const shot: ShotRecord = { ms: Math.round((this.cfg.level.durationSec - this.timeRemaining) * 1000), yaw, pitch, target: null, zone: null, points: 0 };
+    this.shots.push(shot);
+    this.runShots += 1;
+    return shot;
+  }
+
+  /**
+   * Award points + candy for a successful hit, and mark `shot` (the pumpkin that hit) as a hit.
+   * Returns points awarded (0 if not playing).
+   */
+  awardHit(kind: TargetKind, size: SizeClass, zone: RangeZone = 'near', shot: ShotRecord | null = null): number {
     if (!this.acceptsCombat) return 0;
     const pts = pointsFor(kind, size, zone, this.cfg);
     this.levelScore += pts;
     this.levelInventory[CANDY_FOR_TARGET[kind]] += 1;
+    if (shot && shot.target === null) {
+      Object.assign(shot, { target: kind, zone, points: pts });
+      this.runHits += 1;
+    }
     return pts;
   }
 
@@ -181,6 +208,7 @@ export class RunModel {
     this.pausedFrom = null;
     this.levelScore = 0;
     this.levelInventory = emptyInventory();
+    this.shots = [];
     this.hearts = this.cfg.level.startingHearts;
     this.timeRemaining = this.cfg.level.durationSec;
     this.countdownRemaining = 0;

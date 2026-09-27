@@ -4,7 +4,7 @@ import { segmentAabb, segmentGround, segmentSphere } from '../src/core/collision
 import { levelParams } from '../src/core/difficulty';
 import { FireControl } from '../src/core/fireControl';
 import { DEFAULT_SETTINGS, LEGACY_NAME, SaveStore, sanitize } from '../src/core/persistence';
-import { addScore, cleanName, DEFAULT_NAME, rankFor } from '../src/core/scoreboard';
+import { accuracy, addScore, careerRank, cleanName, DEFAULT_NAME, mapRank, rankFor } from '../src/core/scoreboard';
 import type { ScoreEntry } from '../src/types';
 
 describe('fire control', () => {
@@ -152,6 +152,37 @@ describe('scoreboard', () => {
   it('never lists a run that scored nothing', () => {
     expect(rankFor([], 0)).toBeNull();
     expect(addScore([], run('Zero', 0))).toEqual({ board: [], rank: null });
+  });
+
+  it('finds a place in a map top 10 (other maps never count)', () => {
+    const maps = [
+      { map: 'Graveyard', score: 300 },
+      { map: 'Graveyard', score: 100 },
+      { map: 'Haunted House', score: 900 },
+    ];
+    expect(mapRank(maps, 'Graveyard', 200)).toBe(1);
+    expect(mapRank(maps, 'Spooky Forest', 5)).toBe(0);
+    expect(mapRank(maps, 'Graveyard', 0)).toBeNull();
+    const full = Array.from({ length: CONFIG.scoreboard.size }, (_, i) => ({ map: 'Graveyard', score: 100 * (CONFIG.scoreboard.size - i) }));
+    expect(mapRank(full, 'Graveyard', 100)).toBeNull(); // a tie never bumps anyone off
+    expect(mapRank(full, 'Graveyard', 101)).toBe(CONFIG.scoreboard.size - 1);
+  });
+
+  it("finds a player's place on the career board after a run", () => {
+    const career = Array.from({ length: CONFIG.scoreboard.size }, (_, i) => ({ name: `P${i}`, points: 1000 - i * 100 })); // P9 has 100
+    expect(careerRank(career, 'Newbie', 100)).toBeNull();
+    expect(careerRank(career, 'Newbie', 150)).toBe(9);
+    // A listed player adds the run to their own points, matched case-insensitively like the host.
+    expect(careerRank(career, 'p9', 850)).toBe(1);
+    expect(careerRank(career.slice(0, 3), 'Newbie', 1)).toBe(3); // a short board has room
+    expect(careerRank(career, 'P0', 0)).toBeNull();
+  });
+
+  it('turns hits and shots into a whole percentage', () => {
+    expect(accuracy(0, 0)).toBeNull();
+    expect(accuracy(0, 4)).toBe(0);
+    expect(accuracy(1, 3)).toBe(33);
+    expect(accuracy(2, 3)).toBe(67);
   });
 
   it('cleans names: whitespace, control characters, length counted in characters', () => {

@@ -1,39 +1,9 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import type { Scores } from './scores-core.mjs';
 
-export interface RunRow {
-  runId: string;
-  name: string;
-  score: number;
-  level: number;
-}
+export type { Boards, CareerRow, LevelRow, MapRow, RunRow, Scores } from './scores-core.mjs';
 
-export interface LevelRow {
-  level: number;
-  map: string;
-  name: string;
-  score: number;
-  runId: string;
-}
-
-export interface CareerRow {
-  name: string;
-  points: number;
-  games: number;
-  best: number;
-  furthest: number;
-  maps: Array<{ map: string; avg: number; plays: number }>;
-}
-
-export interface Boards {
-  runs: RunRow[];
-  levels: LevelRow[];
-  career: CareerRow[];
-}
-
-export interface ScoresDb {
-  sync(body: unknown): { accepted: number; rejected: number; error?: undefined } | { error: string };
-  boards(): Boards;
-  reset(): void;
+export interface ScoresDb extends Scores {
   close(): void;
 }
 

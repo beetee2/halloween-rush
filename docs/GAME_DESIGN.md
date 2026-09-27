@@ -92,24 +92,46 @@ title ──Start──▶ teleporting ──scene ready──▶ countdown (3 s
 - Pause (key, button, Esc/pointer-lock loss, window blur, hidden tab, page hide, portrait
   rotation, lost WebGL context) freezes the timer and clears all held input. Resuming never
   consumes hidden time. Frame deltas are clamped to 0.1 s and split into ≤1/60 s steps.
+- The level results and game-over screens ignore clicks and taps for their first second
+  (`CONFIG.screens.clickLockSec`; the buttons show dimmed), so a player still firing when the
+  timer hits 0 can't skip them unseen. A Space/F press held over from play never activates a
+  button either; fresh key presses work at once.
 
 ## Names and leaderboards
 
-Each device reports to the host's SQLite database (`scripts/scores-api.mjs`): a `run` when a run
-starts, an `attempt` when a level ends (completed, or failed at game over), and a `name` when
-the player types one. Events wait in a `localStorage` outbox until the host confirms them. They
+Each device reports to a scores database: a `run` when a run starts, an `attempt` when a level
+ends (completed, or failed at game over) with every shot of that level, and a `name` when the
+player types one. Events wait in a `localStorage` outbox until the host confirms them. They
 carry client-made ids, so resending is harmless. A device may only add to or name its own runs.
+The rules and SQL live in `scripts/scores-core.mjs` and run unchanged on two hosts: Cloudflare D1
+for the deployed game (`worker/index.mjs`, shared by everyone who plays it) and a local SQLite
+file for `serve:lan` and the dev servers (`scripts/scores-api.mjs`). Triggers keep per-run,
+per-player, per-map and per-level summary tables current as events arrive, so showing the boards
+costs the same few hundred rows whether the history holds a hundred runs or a million.
 
 - **Run total** on the boards = the latest attempt per level of that run: the same replay
   semantics as the in-game score, so replays never stack.
 - **Level best** = highest *completed* attempt for a level number (replayed attempts included).
-  Beating it (or setting the first one) makes the results screen ask for a name.
-- **Scoreboard** = top 10 run totals (ties: older first). It is always shown at game over. A run
-  that makes it (beats 10th place strictly) asks for a name unless one was already typed during
-  that run, in which case it's saved directly. With the host unreachable, a local top 10 is used.
-- **Career** = per player: total of run totals, games, best run, furthest level, and average
-  points per level attempt on each map (every attempt counts toward averages). Players are grouped
-  by name (case-insensitive); unnamed runs are grouped per device as "Guest (label)".
+- **Maps** = the 10 best *completed* level attempts on each map (replayed attempts included).
+- **Scoreboard** = top 10 run totals (ties: older first). It is always shown at game over. With
+  the host unreachable, a local top 10 is used.
+- **Career** = top 10 players by total of run totals, with games, best run, furthest level,
+  accuracy and average points per level attempt on each map (every attempt counts toward
+  averages). Players are grouped by name (case-insensitive); unnamed runs are grouped per device
+  as "Guest (label)".
+- **Asking for a name:** anyone who makes a board is asked once per run, with the last name used
+  on the device filled in. The results screen asks after a level best or a Maps top 10; the
+  game-over screen asks after a Scoreboard or Career top 10 (strictly beating 10th place, or any
+  room left on a short board). A name typed earlier in the run counts, so it's never asked twice;
+  the badge still says which board was made. Maps and Career need the host's boards; with the host
+  unreachable only level bests (cached) and the local scoreboard can ask.
+- **Shots and accuracy:** every pumpkin fired is logged with its time into the level, aim
+  (yaw/pitch), what it hit (target kind and range zone, or a miss) and the points. A pumpkin
+  scores at most one hit; one still flying when the level ends is a miss. Accuracy = hits ÷ shots,
+  shown on the results (this level), game over (this run), the Scoreboard and Maps rows and the
+  Career rows. Run and career accuracy count every shot, replayed attempts included. Each level's
+  log is stored as one JSON column (`attempts.shot_log`, with `shots`/`hits` counts beside it);
+  the `shots` SQL view unpacks it to one row per shot for analysis.
 - Names are cleaned the same way on both sides (whitespace collapsed, control characters
   removed, max 16 characters) and are always rendered as text.
 - **Device identity:** a random id per browser (`localStorage`) plus a fingerprint hash
@@ -144,7 +166,7 @@ at 2 (desktop) / 1.5 (touch); no real-time shadow maps (baked blob shadows inste
 | Input | `src/input/input.ts` | pointer lock + drag fallback, multi-pointer touch, keyboard |
 | Audio | `src/audio/audio.ts` | synthesized Web Audio (no files), unlocked by a gesture |
 | UI | `index.html`, `src/ui/` | DOM screens, HUD, leaderboard tabs, name entry, safe areas, rotate prompt |
-| Scores | `src/net/device.ts`, `scoreSync.ts`, `scripts/scores-api.mjs` | device id/fingerprint, outbox + sync; SQLite JSON API mounted by `serve-lan.mjs` and the Vite dev/preview servers |
+| Scores | `src/net/device.ts`, `scoreSync.ts`, `scripts/scores-core.mjs`, `scores-api.mjs`, `worker/index.mjs` | device id/fingerprint, outbox + sync; one JSON API over Cloudflare D1 (deployed Worker) or a local SQLite file (`serve-lan.mjs`, Vite dev/preview) |
 | Home Screen | `public/` | manifest (fullscreen, landscape) and icons rendered from `icon.svg` by `scripts/make-icons.mjs` |
 | Orchestration | `src/game.ts`, `src/main.ts` | one independent `Game` per browser tab; gameplay never shared |
 | Test fixtures | `src/testHooks.ts` | only in `vite build --mode e2e`; absent from production builds |

@@ -14,6 +14,7 @@ docs and `docs/` for the design, plan and verification notes.
 | Dev server (hot reload) | `npm run dev` → http://localhost:5173 |
 | Production build | `npm run build` → `dist/` |
 | Serve build on the LAN | `npm run serve:lan` → port 4173 |
+| Deployed setup locally (Worker + local D1) | `npm run build && npx wrangler dev` → port 8787 |
 
 Run `npm run typecheck` and `npm test` before finishing any change.
 
@@ -21,7 +22,21 @@ Run `npm run typecheck` and `npm test` before finishing any change.
 
 - `serve:lan` (sirv) indexes `dist/` at startup. After `npm run build`, **restart it** or the
   new hashed bundle returns 404.
-- Pushing to `main` triggers a Cloudflare deploy of `dist/` (`wrangler.jsonc`).
+- Pushing to `main` triggers a Cloudflare deploy (`wrangler.jsonc`): `dist/` as static assets plus
+  `worker/index.mjs` for `/api/*`, with the shared leaderboards in the D1 database
+  `halloween-rush-scores` (auto-provisioned; no `database_id` in the config). That database is
+  live player data: never reset or rewrite it from tests or scripts.
+- `scripts/scores-core.mjs` runs in the Worker, so it must not import `node:*` modules; Node-only
+  code goes in `scripts/scores-api.mjs`. Schema changes must upgrade existing databases (new
+  `attempts` columns go in `ADDED_COLUMNS`), and each request should stay at a few D1 calls
+  (use `batch()`): the free plan allows 50 queries per request.
+- D1 bills every row a query reads (free plan: 5M a day). The boards read small summary tables
+  that SQLite triggers keep up to date (`DERIVED` in `scores-core.mjs`), about 400 rows per
+  refresh however long the history is. Never make a board query scan `attempts` or `runs`.
+  Editing `DERIVED` rebuilds it from the full history on the next request: that's a one-time
+  cost of about 50 rows read and 7 written per stored run. Trigger bodies must use uppercase
+  `BEGIN`/`END`, no comments and no other `END` (use `iif`, not `CASE`), or remote D1 splits them.
+  The "leaderboard summaries" test checks them against boards recomputed from the history.
 - Nothing is loaded from files: models, textures and sounds are all generated in code. Don't
   add asset files or third-party assets.
 - Dev servers write scores to `data/dev-scores.sqlite`; `serve:lan` uses the real household
@@ -44,7 +59,9 @@ Run `npm run typecheck` and `npm test` before finishing any change.
 - `src/audio/audio.ts` — Web Audio synth. Add a sound by extending the `Sfx` union and the
   `play()` switch; spawn sounds per target kind are mapped in `SPAWN_SFX` in `src/game.ts`.
 - `src/ui/`, `src/input/`, `src/net/` — DOM screens, input, score sync with the host.
-- `scripts/` — LAN server, scores API (`node:sqlite`), icon + link-preview image generator.
+- `scripts/` — LAN server, scores API (`scores-core.mjs` rules/SQL/HTTP shared with the Worker;
+  `scores-api.mjs` wraps `node:sqlite` in the D1-style interface), icon + link-preview image generator.
+- `worker/` — Cloudflare Worker entry for the deployed game's `/api/*`.
 - `about/index.html`, `src/ui/about.css` — plain-HTML About / how-to-play / FAQ page for search
   engines and AI assistants; crawler files live in `public/`.
 

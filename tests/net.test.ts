@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { deviceId, deviceLabel, hash, newId } from '../src/net/device';
-import { parseBoards, ScoreSync, type SyncEvent } from '../src/net/scoreSync';
+import { parseBoards, ScoreSync, shotTuple, type SyncEvent } from '../src/net/scoreSync';
 
 const memory = () => {
   const data = new Map<string, string>();
@@ -119,6 +119,38 @@ describe('score sync outbox', () => {
     await sync.flush();
     expect(http).toHaveBeenCalledTimes(1);
     expect(sync.boards).toBeNull();
+  });
+
+  it('sends a long outbox in small batches, oldest first', async () => {
+    const mem = memory();
+    mem.setItem('halloween-rush:outbox', JSON.stringify(Array.from({ length: 30 }, (_, i) => attempt(i + 1))));
+    const sent: SyncEvent[][] = [];
+    const sync = new ScoreSync(device, mem, async (_url, init) => {
+      sent.push(JSON.parse(String(init.body)).events);
+      return ok();
+    });
+    await sync.flush();
+    expect(sent.map((b) => b.length)).toEqual([25, 5]);
+    expect(sent.flat().map((e) => (e.type === 'attempt' ? e.attempt : 0))).toEqual(Array.from({ length: 30 }, (_, i) => i + 1));
+    expect(sync.pending).toBe(0);
+  });
+
+  it('sends shots compactly, aim rounded to a thousandth of a radian', () => {
+    expect(shotTuple({ ms: 1500, yaw: 0.123456, pitch: -0.0104, target: 'witch', zone: 'far', points: 45 })).toEqual([1500, 0.123, -0.01, 'witch', 'far', 45]);
+    expect(shotTuple({ ms: 0, yaw: 1, pitch: 0.5, target: null, zone: null, points: 0 })).toEqual([0, 1, 0.5, null, null, 0]);
+  });
+
+  it('reads the Maps board and accuracy, and accepts a host from before them', () => {
+    const b = parseBoards({
+      runs: [{ runId: 'r', name: 'A', score: 1, level: 1, shots: 4, hits: 3 }],
+      levels: [],
+      maps: [{ map: 'Graveyard', name: 'A', score: 9, level: 2, runId: 'r', shots: 4, hits: 3 }, { map: 'Graveyard' }],
+      career: [{ name: 'A', points: 9, games: 1, best: 9, furthest: 1, maps: [] }],
+    });
+    expect(b?.runs[0]).toMatchObject({ shots: 4, hits: 3 });
+    expect(b?.maps).toEqual([{ map: 'Graveyard', name: 'A', score: 9, level: 2, runId: 'r', shots: 4, hits: 3 }]);
+    expect(b?.career[0]).toMatchObject({ shots: 0, hits: 0 });
+    expect(parseBoards({ runs: [], levels: [], career: [] })?.maps).toEqual([]);
   });
 
   it('drops malformed rows from the host', () => {

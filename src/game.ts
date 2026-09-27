@@ -7,10 +7,10 @@ import { emptyInventory, inventoryTotal } from './core/inventory';
 import type { SaveStore } from './core/persistence';
 import { Rng, randomSeed } from './core/rng';
 import { RunModel } from './core/run';
-import { addScore, cleanName, DEFAULT_NAME } from './core/scoreboard';
+import { addScore, careerRank, cleanName, DEFAULT_NAME, mapRank } from './core/scoreboard';
 import { InputManager } from './input/input';
 import { newId } from './net/device';
-import type { Boards, ScoreSync } from './net/scoreSync';
+import { shotTuple, type Boards, type ScoreSync } from './net/scoreSync';
 import { Effects, SPLAT_COLORS } from './render/effects';
 import { ENVIRONMENTS, environmentName, type Environment } from './render/environments';
 import { CandyBag, Launcher } from './render/hud3d';
@@ -76,9 +76,11 @@ export class Game {
   runId = '';
   /** A name was typed during this run, so it isn't asked for again. */
   private runNamed = false;
-  /** The results screen is waiting for a name after a level best. */
+  /** Board the finished level made, e.g. "Best score ever on Level 3" (null if none). */
+  private levelHonor: string | null = null;
+  /** The results screen is waiting for a name after the level made a board. */
   private askingLevelName = false;
-  /** The run that just ended made the scoreboard and is waiting for a name. */
+  /** The run that just ended made a board and is waiting for a name. */
   private pendingScore: ScoreEntry | null = null;
   readonly scores: ScoreSync;
   private teleport: { t: number; swapped: boolean; envIndex: number } | null = null;
@@ -419,32 +421,37 @@ export class Game {
     this.endOfLevelInput();
     this.recordAttempt(true);
     const levelNumber = this.run.levelIndex + 1;
+    const map = environmentName(this.envIndex);
     const levelBest = this.raiseLevelBest(levelNumber, this.run.levelScore);
-    this.askingLevelName = levelBest && !this.runNamed;
+    const mapPlace = this.scores.boards ? mapRank(this.scores.boards.maps, map, this.run.levelScore) : null;
+    this.levelHonor = levelBest ? `Best score ever on Level ${levelNumber}` : mapPlace !== null ? `#${mapPlace + 1} on the ${map} board` : null;
+    this.askingLevelName = this.levelHonor !== null && !this.runNamed;
     this.persist();
     this.audio.play('complete');
     const next = levelParams(this.run.levelIndex + 1);
     this.ui.showResults({
-      envName: environmentName(this.envIndex),
+      envName: map,
       levelNumber,
       levelScore: this.run.levelScore,
+      hits: this.run.levelHits,
+      shots: this.run.shots.length,
       total: this.run.totalScore,
       levelCandy: this.run.levelInventory,
       newBest: this.run.newBest,
       nextEnvName: environmentName(next.environmentIndex),
-      levelBest,
+      honor: this.levelHonor,
       askName: this.askingLevelName,
       name: this.playerName,
     });
   }
 
   private saveLevelName(raw: string): void {
-    if (!this.askingLevelName || this.run.phase !== 'levelComplete') return;
+    if (!this.askingLevelName || !this.levelHonor || this.run.phase !== 'levelComplete') return;
     this.askingLevelName = false;
     const name = this.nameRun(raw);
     this.audio.unlock();
     this.audio.play('candy');
-    this.ui.showLevelNameSaved(this.run.levelIndex + 1, name);
+    this.ui.showLevelNameSaved(this.levelHonor, name);
   }
 
   private onGameOver(): void {
@@ -452,19 +459,23 @@ export class Game {
     this.recordAttempt(false);
     this.persist();
     this.audio.play('gameOver');
-    const entry: ScoreEntry = { name: this.playerName || DEFAULT_NAME, score: this.run.totalScore, level: this.run.levelIndex + 1, runId: this.runId };
+    const run = this.run;
+    const entry: ScoreEntry = { name: this.playerName || DEFAULT_NAME, score: run.totalScore, level: run.levelIndex + 1, runId: this.runId, shots: run.runShots, hits: run.runHits };
     const board = this.runBoard();
     const preview = addScore(board.runs, entry);
-    const asking = preview.rank !== null && !this.runNamed;
+    const honor = this.runHonor(preview.rank, entry.score, this.playerName);
+    const asking = honor !== null && !this.runNamed;
     this.pendingScore = asking ? entry : null;
     if (!asking) this.addLocalScore(entry);
     this.ui.showGameOver({
-      levelNumber: this.run.levelIndex + 1,
+      levelNumber: run.levelIndex + 1,
       envName: environmentName(this.envIndex),
-      total: this.run.totalScore,
-      candy: this.run.totalInventory,
-      newBest: this.run.newBest,
-      rank: preview.rank,
+      total: run.totalScore,
+      hits: run.runHits,
+      shots: run.runShots,
+      candy: run.totalInventory,
+      newBest: run.newBest,
+      honor,
       asking,
       name: this.playerName,
       boards: this.boardsView(preview.board, board.shared, this.runId, asking ? entry.name : null),
@@ -476,13 +487,25 @@ export class Game {
     const entry = this.pendingScore;
     if (!entry || this.run.phase !== 'gameOver') return;
     this.pendingScore = null;
-    const named = { ...entry, name: this.nameRun(raw) || DEFAULT_NAME };
+    const name = this.nameRun(raw);
+    const named = { ...entry, name: name || DEFAULT_NAME };
     this.addLocalScore(named);
     const board = this.runBoard();
     const { board: runs, rank } = addScore(board.runs, named);
     this.audio.unlock();
     this.audio.play('complete');
-    this.ui.showSavedScore(this.boardsView(runs, board.shared, this.runId), rank);
+    this.ui.showSavedScore(this.boardsView(runs, board.shared, this.runId), this.runHonor(rank, named.score, name));
+  }
+
+  /**
+   * The board a finished run made, for its badge and name prompt: its place on the scoreboard,
+   * else on the career board (host only), else null. `name` is the run's name ('' = guest).
+   */
+  private runHonor(scoreboardRank: number | null, score: number, name: string): string | null {
+    if (scoreboardRank !== null) return `#${scoreboardRank + 1} on the scoreboard`;
+    const career = this.scores.boards?.career;
+    const place = career ? careerRank(career, name || `Guest (${this.scores.device.label})`, score) : null;
+    return place === null ? null : `#${place + 1} in career points`;
   }
 
   /** The player typed a name: it belongs to this whole run and is offered again next time. */
@@ -496,7 +519,16 @@ export class Game {
 
   private recordAttempt(completed: boolean): void {
     const run = this.run;
-    this.scores.record({ type: 'attempt', runId: this.runId, attempt: run.attempt, level: run.levelIndex + 1, map: environmentName(this.envIndex), score: run.levelScore, completed });
+    this.scores.record({
+      type: 'attempt',
+      runId: this.runId,
+      attempt: run.attempt,
+      level: run.levelIndex + 1,
+      map: environmentName(this.envIndex),
+      score: run.levelScore,
+      completed,
+      shots: run.shots.map(shotTuple),
+    });
   }
 
   /** Remember a level's best score; true if `score` beats everyone's so far. */
@@ -528,6 +560,7 @@ export class Game {
       highlight,
       pendingName,
       levels: b?.levels ?? null,
+      maps: b ? [...b.maps].sort((x, y) => order(x.map) - order(y.map)) : null,
       career: b ? b.career.map((c) => ({ ...c, maps: [...c.maps].sort((x, y) => order(x.map) - order(y.map)) })) : null,
     };
   }
@@ -648,7 +681,8 @@ export class Game {
     cam.getWorldDirection(tmpDir);
     this.world.aimPoint(cam.position, tmpDir, tmpAim);
     this.launcher.muzzleWorld(tmpMuzzle);
-    this.world.fire(tmpMuzzle, tmpAim, this.run);
+    const shot = this.run.fireShot(this.input.yaw, this.input.pitch);
+    this.world.fire(tmpMuzzle, tmpAim, this.run, shot);
     this.shotsFired++;
     this.launcher.fire();
     this.audio.play('fire');

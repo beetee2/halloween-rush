@@ -38,8 +38,9 @@ type State = {
 };
 
 type Boards = {
-  runs: Array<{ runId: string; name: string; score: number; level: number }>;
+  runs: Array<{ runId: string; name: string; score: number; level: number; shots: number; hits: number }>;
   levels: Array<{ level: number; map: string; name: string; score: number }>;
+  maps: Array<{ map: string; name: string; score: number; level: number; shots: number; hits: number }>;
   career: Array<{ name: string; points: number; games: number; best: number; furthest: number; maps: Array<{ map: string; avg: number; plays: number }> }>;
 };
 
@@ -104,7 +105,7 @@ async function shootSucker(page: Page): Promise<number> {
     window.__HR__.setSpawning(false);
     window.__HR__.clearTargets();
   });
-  const id = await page.evaluate(() => window.__HR__.spawn('sucker'));
+  const id = await page.evaluate(() => window.__HR__.spawn('sucker', true));
   await page.evaluate(() => window.__HR__.advance(1.2));
   await page.evaluate((i) => window.__HR__.aimAt(i), id);
   await page.keyboard.press('Space');
@@ -174,6 +175,7 @@ test('level flow: shoot, candy into the bag, results, replay snapshot, next leve
   await expect(page.locator('#hud-total')).toHaveText(String(level1));
   await finishLevel(page);
   await expect(page.locator('#results-level')).toHaveText(String(level1));
+  await expect(page.locator('#results-accuracy')).toHaveText('50% (1/2)'); // the first click missed
   await expect(page.locator('#results-total')).toHaveText(String(level1));
   // Nobody has finished level 1 yet, so this is a level best: a name is asked for before
   // Replay/Next come back.
@@ -183,7 +185,7 @@ test('level flow: shoot, candy into the bag, results, replay snapshot, next leve
   await page.screenshot({ path: `${SHOTS}/desktop-results.png` });
   await page.keyboard.type('Hudson');
   await page.keyboard.press('Enter');
-  await expect(page.locator('#results-levelbest')).toHaveText('New best for Level 1, Hudson!');
+  await expect(page.locator('#results-levelbest')).toHaveText('Best score ever on Level 1, Hudson!');
   await expect(page.locator('#btn-next')).toBeFocused();
 
   // Level 2 (Graveyard): score again, then replay twice → snapshot from the level start each time.
@@ -199,7 +201,7 @@ test('level flow: shoot, candy into the bag, results, replay snapshot, next leve
   await finishLevel(page);
   await expect(page.locator('#results-total')).toHaveText(String(level1 + level2));
   // Another level best, but this run already has a name: no second question.
-  await expect(page.locator('#results-levelbest')).toHaveText('New best for Level 2, Hudson!');
+  await expect(page.locator('#results-levelbest')).toHaveText('Best score ever on Level 2, Hudson!');
   await expect(page.locator('#results-entry')).toBeHidden();
 
   for (let i = 0; i < 2; i++) {
@@ -224,7 +226,12 @@ test('level flow: shoot, candy into the bag, results, replay snapshot, next leve
     [1, 'Haunted House', 'Hudson', level1],
     [2, 'Graveyard', 'Hudson', level2],
   ]);
-  expect(boards.runs).toEqual([{ runId: (await state(page)).runId, name: 'Hudson', score: level1, level: 2 }]);
+  // Accuracy counts every shot of the run, replays included.
+  expect(boards.runs).toEqual([{ runId: (await state(page)).runId, name: 'Hudson', score: level1, level: 2, shots: 3, hits: 2 }]);
+  expect(boards.maps.map((m) => [m.map, m.score, m.shots, m.hits])).toEqual([
+    ['Graveyard', level2, 1, 1],
+    ['Haunted House', level1, 2, 1],
+  ]);
   expect(errors).toEqual([]);
 });
 
@@ -292,6 +299,38 @@ test('holding Space through the end of a level does not press the focused result
   expect(errors).toEqual([]);
 });
 
+test('clicks as a level or run ends do not skip the results or game over screen', async ({ page }) => {
+  const errors = await open(page);
+  await start(page);
+  // Scoring nothing means no name to ask for, so Next Level shows straight away.
+  await finishLevel(page);
+  const click = async (selector: string) => {
+    const box = (await page.locator(selector).boundingBox())!;
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  };
+  // Still clicking to fire when the timer hit 0: the clicks land on Next Level but are ignored.
+  await click('#btn-next');
+  await page.waitForTimeout(300);
+  await click('#btn-next');
+  await page.waitForTimeout(200);
+  expect((await state(page)).phase).toBe('levelComplete');
+  // Once the screen has been up for a moment, Next Level works as usual.
+  await page.waitForTimeout(1000);
+  await click('#btn-next');
+  await expect.poll(async () => (await state(page)).levelIndex).toBe(1);
+
+  await skipCountdown(page);
+  for (let i = 0; i < 3; i++) await page.evaluate(() => window.__HR__.hurt());
+  await waitPhase(page, 'gameOver');
+  await click('#btn-newrun');
+  await page.waitForTimeout(200);
+  expect((await state(page)).phase).toBe('gameOver');
+  await page.waitForTimeout(1200);
+  await click('#btn-newrun');
+  await waitPhase(page, 'countdown');
+  expect(errors).toEqual([]);
+});
+
 test('game over: name onto the scoreboard, career and level boards, new run resets, all saved', async ({ page }) => {
   const errors = await open(page);
   await page.evaluate(() => localStorage.clear());
@@ -307,7 +346,8 @@ test('game over: name onto the scoreboard, career and level boards, new run rese
   await expect(page.locator('#gameover-newbest')).toBeVisible();
   // First on the empty scoreboard: the name box replaces Title/New Run until a name is saved.
   await expect(page.locator('#gameover-entry')).toBeVisible();
-  await expect(page.locator('#gameover-rank')).toHaveText('#1');
+  await expect(page.locator('#gameover-why')).toHaveText('#1 on the scoreboard');
+  await expect(page.locator('#gameover-accuracy')).toContainText('(1/'); // held fire may add misses
   await expect(page.locator('#btn-newrun')).toBeHidden();
   await expect(page.locator('#gameover-name')).toBeFocused();
   await page.keyboard.down('Space'); // the held key auto-repeats...
@@ -324,7 +364,7 @@ test('game over: name onto the scoreboard, career and level boards, new run rese
   await expect(runs.locator('li')).toHaveCount(1);
   await expect(runs.locator('li.you')).toContainText('Hudson');
   await expect(runs.locator('li.you')).toContainText(String(scored));
-  await expect(page.locator('#gameover-boards .boards-note')).toContainText('everyone on this network');
+  await expect(page.locator('#gameover-boards .boards-note')).toContainText('everyone who plays here');
   await page.screenshot({ path: `${SHOTS}/desktop-gameover.png` });
   // Career (from the host): points over every game and the average per map.
   await page.click('#gameover-boards [role="tab"]:has-text("Career")');
@@ -332,6 +372,8 @@ test('game over: name onto the scoreboard, career and level boards, new run rese
   await expect(career).toContainText('Hudson');
   await expect(career).toContainText(`1 game · best ${scored} · Lv 1`);
   await expect(career).toContainText(`Avg/map: House ${scored}`);
+  await page.click('#gameover-boards [role="tab"]:has-text("Maps")');
+  await expect(page.locator('#gameover-boards [aria-label="Maps"]')).toContainText('No levels finished yet.');
   await page.click('#gameover-boards [role="tab"]:has-text("Level bests")');
   await expect(page.locator('#gameover-boards ol[aria-label="Level bests"]')).toContainText('No levels finished yet.');
 
@@ -586,7 +628,7 @@ test('phone landscape: a full scoreboard and career fit the game-over screen; Sa
   // that scored at least as much, since a tie goes below the older entry.
   const rank = earlierRuns.filter((score) => score >= scored).length + 1;
   expect(rank).toBeLessThanOrEqual(10);
-  await expect(page.locator('#gameover-rank')).toHaveText(`#${rank}`);
+  await expect(page.locator('#gameover-why')).toHaveText(`#${rank} on the scoreboard`);
   await expect(page.locator('#gameover-name')).not.toBeFocused(); // no surprise keyboard on touch
   const save = (await page.locator('#btn-save-score').boundingBox())!;
   expect(save.y + save.height).toBeLessThanOrEqual(360);
@@ -606,6 +648,72 @@ test('phone landscape: a full scoreboard and career fit the game-over screen; Sa
   await page.screenshot({ path: `${SHOTS}/phone-gameover-career.png` });
   expect(errors).toEqual([]);
   await ctx.close();
+});
+
+test('making a Maps or Career top 10 asks for a name too', async ({ page, request }) => {
+  // A full scoreboard (100–1,000 on Level 1) and one finished Graveyard level, by four family members.
+  const events: object[] = [];
+  const family = ['Hudson', 'Dad', 'Mom', 'Grandma Sue'];
+  for (let i = 0; i < 10; i++) {
+    const id = `seed-run-${String(i).padStart(4, '0')}`;
+    events.push({ type: 'run', id, player: family[i % family.length] }, { type: 'attempt', runId: id, attempt: 1, level: 1, map: 'Haunted House', score: (i + 1) * 100, completed: true });
+  }
+  events.push({ type: 'attempt', runId: 'seed-run-0000', attempt: 2, level: 2, map: 'Graveyard', score: 500, completed: true });
+  const seeded = await request.post('/api/sync', { data: { device: { id: 'seed-device-0001', fingerprint: 'seed', label: 'Windows · Chrome' }, events } });
+  expect((await seeded.json()).accepted).toBe(21);
+
+  const errors = await open(page);
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await page.waitForFunction(() => !!window.__HR__);
+  await start(page);
+  // Level 1: 25 makes no board (the Haunted House top 10 starts at 100).
+  await shootSucker(page);
+  await finishLevel(page);
+  await expect(page.locator('#results-accuracy')).toHaveText('100% (1/1)');
+  await expect(page.locator('#results-entry')).toBeHidden();
+  await expect(page.locator('#results-levelbest')).toBeHidden();
+  // Level 2: not the Level 2 record (500), but second best on the Graveyard.
+  await page.click('#btn-next');
+  await skipCountdown(page);
+  await shootSucker(page);
+  await finishLevel(page);
+  await expect(page.locator('#results-entry')).toBeVisible();
+  await expect(page.locator('#results-why')).toHaveText('#2 on the Graveyard board');
+  await page.keyboard.type('Maya');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#results-levelbest')).toHaveText('#2 on the Graveyard board, Maya!');
+  // Game over on level 3: 50 misses the scoreboard, but Maya is 5th of five players in career
+  // points. The run already has her name, so there's only the badge.
+  await page.click('#btn-next');
+  await skipCountdown(page);
+  for (let i = 0; i < 3; i++) await page.evaluate(() => window.__HR__.hurt());
+  await waitPhase(page, 'gameOver');
+  await expect(page.locator('#gameover-entry')).toBeHidden();
+  await expect(page.locator('#gameover-rankbadge')).toHaveText('#5 in career points!');
+  // A new run hasn't had its name confirmed yet, so making the career board asks again,
+  // offering the last name used.
+  await page.click('#btn-newrun');
+  await skipCountdown(page);
+  await shootSucker(page);
+  for (let i = 0; i < 3; i++) await page.evaluate(() => window.__HR__.hurt());
+  await waitPhase(page, 'gameOver');
+  await expect(page.locator('#gameover-entry')).toBeVisible();
+  await expect(page.locator('#gameover-why')).toHaveText('#5 in career points');
+  await expect(page.locator('#gameover-name')).toHaveValue('Maya');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#gameover-rankbadge')).toHaveText('#5 in career points!');
+
+  await page.click('#gameover-boards [role="tab"]:has-text("Career")');
+  await expect(page.locator('#gameover-boards ol[aria-label="Career"] li').nth(4)).toContainText('Maya');
+  await expect(page.locator('#gameover-boards ol[aria-label="Career"] li').nth(4)).toContainText('2 games · best 50 · Lv 3 · 100%');
+  await page.click('#gameover-boards [role="tab"]:has-text("Maps")');
+  const maps = page.locator('#gameover-boards [aria-label="Maps"]');
+  await expect(maps.locator('ol[aria-label="Haunted House top 10"] li')).toHaveCount(10);
+  await expect(maps.locator('ol[aria-label="Graveyard top 10"] li').nth(1)).toContainText('Maya');
+  await expect(maps.locator('ol[aria-label="Graveyard top 10"] li').nth(1)).toContainText('Lv 2 · 100%');
+  await page.screenshot({ path: `${SHOTS}/desktop-gameover-maps.png` });
+  expect(errors).toEqual([]);
 });
 
 async function tour(page: Page, prefix: string): Promise<void> {

@@ -1,5 +1,5 @@
 import { CONFIG } from '../config';
-import { cleanName, DEFAULT_NAME } from '../core/scoreboard';
+import { accuracy, cleanName, DEFAULT_NAME } from '../core/scoreboard';
 import type { Bests, CandyKind, Inventory, SizeClass } from '../types';
 import { CANDY_KINDS } from '../types';
 import { BoardPanel, type BoardsView } from './boards';
@@ -37,6 +37,12 @@ function $(id: string): HTMLElement {
 
 const fmt = (n: number) => n.toLocaleString('en-US');
 
+/** "62% (31/50)" */
+function hitText(hits: number, shots: number): string {
+  const pct = accuracy(hits, shots);
+  return pct === null ? 'No shots' : `${pct}% (${fmt(hits)}/${fmt(shots)})`;
+}
+
 /** Thin DOM layer: screens, HUD, popups and warnings. No game rules live here. */
 export class UI {
   private readonly screens: Record<Exclude<Screen, null>, HTMLElement>;
@@ -47,6 +53,8 @@ export class UI {
   private settingsReturn: Screen = null;
   /** Lowest y a warning marker may use so it never covers the timer or scores (null = re-measure). */
   private warnTop: number | null = null;
+  /** Screen whose buttons are briefly ignoring the pointer (see lockClicks). */
+  private clickLocked: { screen: HTMLElement; timer: ReturnType<typeof setTimeout> } | null = null;
   private readonly nameInput: HTMLInputElement;
   private readonly levelNameInput: HTMLInputElement;
   private readonly gameOverBoards: BoardPanel;
@@ -98,7 +106,7 @@ export class UI {
     this.onSubmit('gameover-entry', () => handler(this.nameInput.value));
   }
 
-  /** The player submitted a name after a level best. */
+  /** The player submitted a name on the level results (a level best or a map top 10). */
   onSaveLevelName(handler: (name: string) => void): void {
     this.onSubmit('results-entry', () => handler(this.levelNameInput.value));
   }
@@ -125,12 +133,32 @@ export class UI {
   }
 
   show(screen: Screen): void {
+    this.unlockClicks();
     this.current = screen;
     for (const [name, el] of Object.entries(this.screens)) el.hidden = name !== screen;
     const buttons = screen ? Array.from(this.screens[screen].querySelectorAll<HTMLElement>('.btn.primary')) : [];
     const focusable = buttons.find((b) => !b.closest('[hidden]'));
     // Focus the main action for keyboard players without scrolling the page.
     focusable?.focus({ preventScroll: true });
+  }
+
+  /**
+   * A level ending mid-fire: for a moment the current screen's buttons ignore the pointer, so
+   * clicks and taps still coming from play can't press Next Level or New Run unseen. Keys are
+   * unaffected (a held Space is already stopped by the input manager).
+   */
+  private lockClicks(): void {
+    const screen = this.current && this.screens[this.current];
+    if (!screen) return;
+    screen.classList.add('click-lock');
+    this.clickLocked = { screen, timer: setTimeout(() => this.unlockClicks(), CONFIG.screens.clickLockSec * 1000) };
+  }
+
+  private unlockClicks(): void {
+    if (!this.clickLocked) return;
+    clearTimeout(this.clickLocked.timer);
+    this.clickLocked.screen.classList.remove('click-lock');
+    this.clickLocked = null;
   }
 
   openSettings(): void {
@@ -288,71 +316,76 @@ export class UI {
   }
 
   /**
-   * `levelBest`: nobody has scored more on this level. The first time that happens in a run
-   * (`askName`), the name box replaces Replay/Next until a name is saved.
+   * `honor`: the level made a leaderboard ("Best score ever on Level 3", "#2 on the Graveyard
+   * board"). If the run has no name yet (`askName`), the name box replaces Replay/Next until saved.
    */
-  showResults(d: { envName: string; levelNumber: number; levelScore: number; total: number; levelCandy: Inventory; newBest: boolean; nextEnvName: string; levelBest: boolean; askName: boolean; name: string }): void {
+  showResults(d: { envName: string; levelNumber: number; levelScore: number; hits: number; shots: number; total: number; levelCandy: Inventory; newBest: boolean; nextEnvName: string; honor: string | null; askName: boolean; name: string }): void {
     $('results-env').textContent = `Level ${d.levelNumber} · ${d.envName}`;
     $('results-level').textContent = fmt(d.levelScore);
+    $('results-accuracy').textContent = hitText(d.hits, d.shots);
     $('results-total').textContent = fmt(d.total);
     this.fillCandy($('results-candy'), d.levelCandy, 'No candy this time — keep shooting!');
     $('results-best').hidden = !d.newBest;
-    this.setLevelBadge(d.levelBest && !d.askName, d.levelNumber, d.name);
+    this.setLevelBadge(d.askName ? null : d.honor, d.name);
     $('results-entry').hidden = !d.askName;
     $('results-actions').hidden = d.askName;
-    $('results-entry-level').textContent = `Level ${d.levelNumber}`;
+    $('results-why').textContent = d.honor ?? '';
     this.levelNameInput.value = d.name;
     $('btn-next').textContent = `Next: ${d.nextEnvName}`;
     this.show('results');
+    this.lockClicks();
     if (d.askName) this.focusName(this.levelNameInput);
   }
 
-  showLevelNameSaved(levelNumber: number, name: string): void {
+  showLevelNameSaved(honor: string, name: string): void {
     $('results-entry').hidden = true;
     $('results-actions').hidden = false;
-    this.setLevelBadge(true, levelNumber, name);
+    this.setLevelBadge(honor, name);
     $('btn-next').focus({ preventScroll: true });
   }
 
-  private setLevelBadge(show: boolean, levelNumber: number, name: string): void {
+  private setLevelBadge(honor: string | null, name: string): void {
     const badge = $('results-levelbest');
-    badge.hidden = !show;
-    badge.textContent = `New best for Level ${levelNumber}${name ? `, ${name}` : ''}!`;
+    badge.hidden = honor === null;
+    badge.textContent = honor === null ? '' : `${honor}${name ? `, ${name}` : ''}!`;
   }
 
   /**
-   * `boards.runs` already includes this run when it made the scoreboard (`rank` is its place).
-   * If the run has no name yet (`asking`), the name box replaces Title/New Run until saved.
+   * `boards.runs` already includes this run when it made the scoreboard. `honor` says which
+   * board it made ("#3 on the scoreboard", "#2 in career points"). If the run has no name yet
+   * (`asking`), the name box replaces Title/New Run until saved.
    */
-  showGameOver(d: { levelNumber: number; envName: string; total: number; candy: Inventory; newBest: boolean; rank: number | null; asking: boolean; name: string; boards: BoardsView }): void {
+  showGameOver(d: { levelNumber: number; envName: string; total: number; hits: number; shots: number; candy: Inventory; newBest: boolean; honor: string | null; asking: boolean; name: string; boards: BoardsView }): void {
     $('gameover-sub').textContent = `The jack-o'-lanterns got you on level ${d.levelNumber} (${d.envName}).`;
     $('gameover-total').textContent = fmt(d.total);
+    $('gameover-accuracy').textContent = hitText(d.hits, d.shots);
     this.fillCandy($('gameover-candy'), d.candy, 'Your bag was empty this run.');
     $('gameover-newbest').hidden = !d.newBest;
-    this.setRankBadge(d.asking ? null : d.rank);
+    this.setRankBadge(d.asking ? null : d.honor);
     $('gameover-entry').hidden = !d.asking;
     $('gameover-actions').hidden = d.asking;
-    if (d.rank !== null) $('gameover-rank').textContent = `#${d.rank + 1}`;
+    $('gameover-why').textContent = d.honor ?? '';
     this.nameInput.value = d.name;
     this.gameOverBoards.select('runs');
     this.gameOverBoards.render(d.boards);
     this.show('gameOver');
+    this.lockClicks();
     if (d.asking) this.focusName(this.nameInput);
   }
 
   /** The name was saved: show the final boards and bring back the buttons. */
-  showSavedScore(boards: BoardsView, rank: number | null): void {
+  showSavedScore(boards: BoardsView, honor: string | null): void {
     $('gameover-entry').hidden = true;
     $('gameover-actions').hidden = false;
-    this.setRankBadge(rank);
+    this.setRankBadge(honor);
     this.gameOverBoards.render(boards);
     $('btn-newrun').focus({ preventScroll: true });
   }
 
-  private setRankBadge(rank: number | null): void {
+  private setRankBadge(honor: string | null): void {
     const badge = $('gameover-rankbadge');
-    badge.hidden = rank === null;
-    badge.textContent = rank === null ? '' : `#${rank + 1} on the scoreboard!`;
+    badge.hidden = honor === null;
+    badge.textContent = honor === null ? '' : `${honor}!`;
   }
 
   private fillCandy(el: HTMLElement, inv: Inventory, empty: string): void {

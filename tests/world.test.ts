@@ -119,6 +119,23 @@ describe('projectiles and hits', () => {
     }
   });
 
+  it('marks the shot that hit; a second pumpkin at the same target stays a miss', () => {
+    const { world, run } = setup();
+    world.spawningEnabled = false;
+    world.spawn('sucker');
+    stepFor(world, run, 1.2);
+    const target = world.targets[0]!;
+    const first = run.fireShot(0, 0);
+    world.fire(muzzle(), aimAt(target), run, first);
+    stepFor(world, run, 0.05);
+    const second = run.fireShot(0, 0);
+    world.fire(muzzle(), aimAt(target), run, second);
+    stepFor(world, run, 2.5);
+    expect(first).toMatchObject({ target: 'sucker', zone: 'near', points: 25 });
+    expect(second).toMatchObject({ target: null, zone: null, points: 0 });
+    expect([run.levelHits, run.shots.length]).toEqual([1, 2]);
+  });
+
   it('solid scenery stops the shot before a target behind it', () => {
     const layout = openLayout();
     layout.blockers.push({ min: { x: -3, y: 0, z: -7 }, max: { x: 3, y: 5, z: -6.5 } });
