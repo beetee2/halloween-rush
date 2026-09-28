@@ -15,10 +15,12 @@ export function rangeZone(distance: number, cfg: GameConfig = CONFIG): RangeZone
   return 'near';
 }
 
-/** Base points (per-type override, else size class) plus the range bonus. */
-export function pointsFor(kind: TargetKind, size: SizeClass, zone: RangeZone = 'near', cfg: GameConfig = CONFIG): number {
+/** Base points (per-type override, else size class) plus the range bonus, multiplied for a headshot. */
+export function pointsFor(kind: TargetKind, size: SizeClass, zone: RangeZone = 'near', headshot = false, cfg: GameConfig = CONFIG): number {
   const kindPoints: Partial<Record<TargetKind, number>> = cfg.kindPoints;
-  return (kindPoints[kind] ?? cfg.points[size]) + cfg.range.bonus[zone];
+  const headshotMultiplier: Partial<Record<TargetKind, number>> = cfg.headshotMultiplier;
+  const points = (kindPoints[kind] ?? cfg.points[size]) + cfg.range.bonus[zone];
+  return headshot ? points * (headshotMultiplier[kind] ?? 1) : points;
 }
 
 /**
@@ -149,9 +151,9 @@ export class RunModel {
    * Award points + candy for a successful hit, and mark `shot` (the pumpkin that hit) as a hit.
    * Returns points awarded (0 if not playing).
    */
-  awardHit(kind: TargetKind, size: SizeClass, zone: RangeZone = 'near', shot: ShotRecord | null = null): number {
+  awardHit(kind: TargetKind, size: SizeClass, zone: RangeZone = 'near', shot: ShotRecord | null = null, headshot = false): number {
     if (!this.acceptsCombat) return 0;
-    const pts = pointsFor(kind, size, zone, this.cfg);
+    const pts = pointsFor(kind, size, zone, headshot, this.cfg);
     this.levelScore += pts;
     this.levelInventory[CANDY_FOR_TARGET[kind]] += 1;
     if (shot && shot.target === null) {

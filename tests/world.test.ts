@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { CONFIG } from '../src/config';
 import { levelParams } from '../src/core/difficulty';
 import { Rng } from '../src/core/rng';
-import { RunModel } from '../src/core/run';
+import { RunModel, pointsFor } from '../src/core/run';
 import { ENVIRONMENTS } from '../src/render/environments';
 import type { EnvironmentLayout } from '../src/render/environments/common';
 import { ModelLibrary } from '../src/render/models/characters';
@@ -22,9 +22,12 @@ const openLayout = (): EnvironmentLayout => ({
 });
 
 function setup(levelIndex = 0, layout = openLayout(), seed = 7) {
-  const log = { hits: [] as Array<{ kind: string; points: number }>, scenery: 0, playerHits: [] as boolean[], prepares: 0, throws: 0 };
+  const log = { hits: [] as Array<{ kind: string; points: number }>, headshots: 0, scenery: 0, playerHits: [] as boolean[], prepares: 0, throws: 0 };
   const events: Partial<WorldEvents> = {
-    targetHit: (t, _p, points) => log.hits.push({ kind: t.kind, points }),
+    targetHit: (t, _p, points, headshot) => {
+      log.hits.push({ kind: t.kind, points });
+      if (headshot) log.headshots++;
+    },
     sceneryHit: () => log.scenery++,
     playerHit: (d) => log.playerHits.push(d),
     spiderPrepare: () => log.prepares++,
@@ -168,6 +171,44 @@ describe('projectiles and hits', () => {
     world.spawningEnabled = false;
     for (let i = 0; i < 40; i++) world.fire(muzzle(), new THREE.Vector3(0, 30, -80), run);
     expect(world.projectiles.length).toBeLessThanOrEqual(CONFIG.weapon.maxActiveProjectiles);
+  });
+});
+
+describe('headshots', () => {
+  /** Where `track()` will be when a pumpkin from the muzzle gets there, from its velocity over one step. */
+  function lead(world: World, run: RunModel, track: () => THREE.Vector3): THREE.Vector3 {
+    const before = track().clone();
+    stepFor(world, run, STEP);
+    const now = track();
+    const flightSec = now.distanceTo(muzzle()) / CONFIG.weapon.projectileSpeed;
+    return now.clone().addScaledVector(now.clone().sub(before), flightSec / STEP);
+  }
+
+  for (const kind of ['frankenstein', 'witch'] as const) {
+    it(`a ${kind} hit in the head scores double; a hit in the body does not`, () => {
+      for (const part of ['head', 'body'] as const) {
+        const layout = openLayout();
+        layout.witchLanes = [{ y: 4, z: -8, xMin: -10, xMax: 10 }];
+        const { world, run, log } = setup(0, layout);
+        world.spawningEnabled = false;
+        const target = world.spawn(kind)!;
+        stepFor(world, run, 2.0);
+        // Low on the body, so the line of flight stays well clear of the head.
+        const track = () => (part === 'head' ? target.head!.center : target.shapes[0]!.center.clone().setY(target.shapes[0]!.center.y - 0.3));
+        const shot = run.fireShot(0, 0)!;
+        world.fire(muzzle(), lead(world, run, track), run, shot);
+        stepFor(world, run, 1);
+        expect(shot.target, `${kind} ${part}`).toBe(kind);
+        expect(shot.points, `${kind} ${part}`).toBe(pointsFor(kind, target.size, shot.zone!, part === 'head'));
+        expect(log.headshots, `${kind} ${part}`).toBe(part === 'head' ? 1 : 0);
+      }
+    });
+  }
+
+  it('other targets have no head zone', () => {
+    const { world } = setup();
+    world.spawningEnabled = false;
+    for (const kind of ['spider', 'candyCorn', 'sucker'] as const) expect(world.spawn(kind)!.head).toBeNull();
   });
 });
 

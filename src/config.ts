@@ -45,6 +45,12 @@ export const CONFIG = {
     candyCorn: 100,
   } satisfies Partial<Record<TargetKind, number>>,
 
+  /** Points multiplier (range bonus included) for a hit on the head zone in `targets`. */
+  headshotMultiplier: {
+    frankenstein: 2,
+    witch: 2,
+  } satisfies Partial<Record<TargetKind, number>>,
+
   /** Range bonus by distance (m) from the player's eye to the hit point. */
   range: {
     mediumFromM: 12,
@@ -84,8 +90,12 @@ export const CONFIG = {
   },
 
   targets: {
-    frankenstein: { hitSpheres: [{ y: 1.45, r: 0.66 }, { y: 2.35, r: 0.5 }], spawnMargin: 1.2 },
-    witch: { hitRadius: 0.8, hitCenterY: 0.55, bobAmplitude: 0.6, spawnMargin: 3 },
+    /**
+     * `head` is the headshot zone (y above the model's feet or broom). It isn't hit-tested:
+     * a hit is a headshot when the pumpkin's line of flight passes through it.
+     */
+    frankenstein: { hitSpheres: [{ y: 1.45, r: 0.66 }, { y: 2.35, r: 0.5 }], head: { y: 2.4, r: 0.42 }, spawnMargin: 1.2 },
+    witch: { hitRadius: 0.8, hitCenterY: 0.55, head: { y: 1.15, r: 0.38 }, bobAmplitude: 0.6, spawnMargin: 3 },
     spider: {
       hitRadius: { small: 0.46, medium: 0.64 } as Record<'small' | 'medium', number>,
       mediumChance: 0.15,

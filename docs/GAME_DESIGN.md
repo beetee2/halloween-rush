@@ -23,6 +23,9 @@ _This document describes the delivered build. Every number below comes from `src
   **witches (75)** and **candy corn (100)**, which have their own values.
 - **Range bonus** per hit, by distance from the player to the hit point: near (under 12 m) **+0**,
   medium (12–18 m) **+5**, far (18 m and beyond) **+10**.
+- **Headshots** on Frankensteins and witches score **double** (range bonus included). A hit is a
+  headshot when the pumpkin's line of flight passes through the head zone, so aiming the
+  crosshair at the head counts even when the pumpkin first touches the body's hit sphere.
 
 | Target | Size | Behaviour | Candy it drops |
 | --- | --- | --- | --- |

@@ -13,11 +13,11 @@ export function installTestHooks(game: Game): void {
   const step = CONFIG.sim.maxStepSec;
   // Which spot a seeded target lands on decides its range bonus, so tests read the scored
   // hit back instead of hard-coding points. The run's own rule still awards them.
-  let lastHit: { kind: TargetKind; size: SizeClass; zone: RangeZone; points: number } | null = null;
+  let lastHit: { kind: TargetKind; size: SizeClass; zone: RangeZone; headshot: boolean; points: number } | null = null;
   const awardHit = game.run.awardHit.bind(game.run);
-  game.run.awardHit = (kind, size, zone = 'near', shot = null) => {
-    const points = awardHit(kind, size, zone, shot);
-    lastHit = { kind, size, zone, points };
+  game.run.awardHit = (kind, size, zone = 'near', shot = null, headshot = false) => {
+    const points = awardHit(kind, size, zone, shot, headshot);
+    lastHit = { kind, size, zone, headshot, points };
     return points;
   };
   const api = {
@@ -72,7 +72,7 @@ export function installTestHooks(game: Game): void {
       for (const t of [...game.world.targets]) t.removed = true;
       game.world.sweep(0);
     },
-    /** The most recent hit: target kind and size, range zone and the points awarded. */
+    /** The most recent hit: target kind and size, range zone, headshot and the points awarded. */
     lastHit() {
       return lastHit;
     },

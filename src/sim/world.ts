@@ -21,7 +21,7 @@ import {
 } from './targets';
 
 export interface WorldEvents {
-  targetHit(target: Target, point: THREE.Vector3, points: number): void;
+  targetHit(target: Target, point: THREE.Vector3, points: number, headshot: boolean): void;
   sceneryHit(point: THREE.Vector3): void;
   /** An incoming pumpkin reached the player; `damaged` is false during immunity. */
   playerHit(damaged: boolean): void;
@@ -45,6 +45,8 @@ const SPAWN_KINDS: readonly SpawnKind[] = ['frankenstein', 'witch', 'spider', 'c
 
 const tmpA = new THREE.Vector3();
 const tmpB = new THREE.Vector3();
+/** How far past the hit point a pumpkin's line of flight is followed to look for a head. */
+const HEAD_RAY_M = 3;
 
 /**
  * Gameplay simulation: spawning, target behaviour, player projectiles and collisions.
@@ -226,7 +228,7 @@ export class World {
     // Point-blank: the launcher barrel occupies eye→muzzle, so test that segment first.
     const hit = this.firstTargetHit(this.eye, muzzle, CONFIG.weapon.projectileRadius);
     if (hit) {
-      this.registerHit(hit.target, muzzle.clone(), shot);
+      this.registerHit(hit.target, muzzle.clone(), proj.vel, shot);
       this.releaseProjectile(proj);
       return null;
     }
@@ -271,11 +273,17 @@ export class World {
     return best;
   }
 
-  private registerHit(target: Target, point: THREE.Vector3, shot: ShotRecord | null): void {
+  /**
+   * Score a hit. It's a headshot when the pumpkin's line of flight (`vel`) from the hit point
+   * passes through the target's head zone, i.e. it was on course for the head.
+   */
+  private registerHit(target: Target, point: THREE.Vector3, vel: THREE.Vector3, shot: ShotRecord | null): void {
     target.hit();
     const zone = rangeZone(point.distanceTo(this.eye));
-    const points = this.run ? this.run.awardHit(target.kind, target.size, zone, shot) : 0;
-    this.events.targetHit?.(target, point, points);
+    const head = target.head;
+    const headshot = head !== null && segmentSphere(point, tmpB.copy(vel).setLength(HEAD_RAY_M).add(point), head.center, head.radius) !== null;
+    const points = this.run ? this.run.awardHit(target.kind, target.size, zone, shot, headshot) : 0;
+    this.events.targetHit?.(target, point, points, headshot);
   }
 
   // ------------------------------------------------------------------ simulation
@@ -301,7 +309,7 @@ export class World {
       const sceneryT = this.firstSceneryHit(p.pos, p1);
       if (targetHit && (sceneryT === null || targetHit.t <= sceneryT)) {
         const point = p.pos.clone().lerp(p1, targetHit.t);
-        this.registerHit(targetHit.target, point, p.shot);
+        this.registerHit(targetHit.target, point, p.vel, p.shot);
         this.removeProjectile(i);
         continue;
       }

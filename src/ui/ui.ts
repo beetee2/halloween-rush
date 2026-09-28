@@ -296,13 +296,13 @@ export class UI {
     el.classList.toggle('in', state === 'in');
   }
 
-  popup(x: number, y: number, points: number, size: SizeClass): void {
+  popup(x: number, y: number, points: number, size: SizeClass, headshot = false): void {
     const el = this.popups[this.popupNext]!;
     this.popupNext = (this.popupNext + 1) % this.popups.length;
     el.hidden = true;
     void el.offsetWidth;
-    el.className = `pop ${size}`;
-    el.textContent = `+${points}`;
+    el.className = headshot ? `pop ${size} headshot` : `pop ${size}`;
+    el.textContent = headshot ? `Headshot! +${points}` : `+${points}`;
     el.style.left = `${x}px`;
     el.style.top = `${y}px`;
     el.hidden = false;

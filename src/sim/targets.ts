@@ -41,6 +41,8 @@ export abstract class Target {
   private dying = -1;
   private flashed: Array<[THREE.Mesh, THREE.Material | THREE.Material[]]> = [];
   readonly shapes: HitShape[] = [];
+  /** Headshot zone, for types that score a headshot bonus. Not part of the hit test. */
+  readonly head: HitShape | null = null;
 
   constructor(
     readonly id: number,
@@ -98,6 +100,7 @@ export abstract class Target {
 // -------------------------------------------------------------------- Frankenstein
 export class FrankTarget extends Target {
   readonly kind = 'frankenstein' as const;
+  override readonly head: HitShape = { center: new THREE.Vector3(), radius: CONFIG.targets.frankenstein.head.r };
   private x: number;
   private dir: 1 | -1;
   private turnAt: number | null;
@@ -159,12 +162,14 @@ export class FrankTarget extends Target {
     mdl.root.scale.setScalar(0.2 + 0.8 * grow);
     const spheres = CONFIG.targets.frankenstein.hitSpheres;
     spheres.forEach((s, i) => this.shapes[i]!.center.set(this.x, s.y + bob, this.lane.z));
+    this.head.center.set(this.x, CONFIG.targets.frankenstein.head.y + bob, this.lane.z);
   }
 }
 
 // -------------------------------------------------------------------- Witch
 export class WitchTarget extends Target {
   readonly kind = 'witch' as const;
+  override readonly head: HitShape = { center: new THREE.Vector3(), radius: CONFIG.targets.witch.head.r };
   private x: number;
   private readonly dir: 1 | -1;
   private readonly speed: number;
@@ -206,6 +211,7 @@ export class WitchTarget extends Target {
     this.model.cape.rotation.x = 0.5 + Math.sin(t * 9) * 0.18;
     this.model.hat.rotation.z = Math.sin(t * 5 + this.phase) * 0.08;
     this.shapes[0]!.center.set(this.x, y + CONFIG.targets.witch.hitCenterY, this.lane.z);
+    this.head.center.set(this.x, y + CONFIG.targets.witch.head.y, this.lane.z);
   }
 }
 

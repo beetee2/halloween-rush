@@ -53,6 +53,26 @@ describe('scoring', () => {
     expect(pointsFor('candyCorn', 'small', 'medium')).toBe(105);
   });
 
+  it('doubles a Frankenstein or witch headshot, range bonus included', () => {
+    expect(pointsFor('frankenstein', 'large', 'near', true)).toBe(20);
+    expect(pointsFor('frankenstein', 'large', 'far', true)).toBe(40);
+    expect(pointsFor('witch', 'medium', 'near', true)).toBe(150);
+    expect(pointsFor('witch', 'medium', 'medium', true)).toBe(160);
+    // Types without a head zone never get the bonus.
+    expect(pointsFor('sucker', 'medium', 'near', true)).toBe(25);
+  });
+
+  it('records the doubled points on the shot that scored a headshot', () => {
+    const run = new RunModel();
+    run.startNewRun();
+    run.sceneReady();
+    run.advance(CONFIG.level.countdownSec);
+    const shot = run.fireShot(0, 0);
+    expect(run.awardHit('witch', 'medium', 'near', shot, true)).toBe(150);
+    expect(shot).toMatchObject({ target: 'witch', zone: 'near', points: 150 });
+    expect(run.levelScore).toBe(150);
+  });
+
   it('uses explicit size classes per target type', () => {
     expect(CONFIG.defaultSize.frankenstein).toBe('large');
     expect(CONFIG.defaultSize.witch).toBe('medium');

@@ -120,7 +120,7 @@ export class Game {
     this.applyFog();
 
     this.world = new World(this.lib, new Rng(opts.seed ?? randomSeed()), {
-      targetHit: (t, p, pts) => this.onTargetHit(t, p, pts),
+      targetHit: (t, p, pts, headshot) => this.onTargetHit(t, p, pts, headshot),
       sceneryHit: (p) => {
         this.effects.burst(p, SPLAT_COLORS.scenery!, 10, 3, 0.07);
         this.audio.play('scenery', this.pan(p));
@@ -706,10 +706,10 @@ export class Game {
     this.effects.burst(tmpMuzzle, [0xffb04a, 0xfff2c0], 4, 1.2, 0.025);
   }
 
-  private onTargetHit(t: Target, point: THREE.Vector3, points: number): void {
+  private onTargetHit(t: Target, point: THREE.Vector3, points: number, headshot: boolean): void {
     this.effects.burst(point, SPLAT_COLORS[t.kind] ?? SPLAT_COLORS.scenery!, t.kind === 'frankenstein' ? 22 : 16, 5, t.kind === 'spider' ? 0.07 : 0.1);
     this.audio.play('splat', this.pan(point));
-    if (points > 0 && this.stage.project(point, screenPos)) this.ui.popup(screenPos.x, screenPos.y, points, t.size);
+    if (points > 0 && this.stage.project(point, screenPos)) this.ui.popup(screenPos.x, screenPos.y, points, t.size, headshot);
     // Fly a miniature candy from where the target was into the bag.
     tmpLocal.copy(point);
     this.stage.camera.worldToLocal(tmpLocal);

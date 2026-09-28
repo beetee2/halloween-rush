@@ -379,6 +379,11 @@ body:not(.touch) .how-touch {
   font-size: 20px;
 }
 
+#popups .pop.headshot {
+  color: #ff8a1c;
+  font-size: 26px;
+}
+
 #damage-flash {
   position: absolute;
   inset: 0;
