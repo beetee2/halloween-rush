@@ -69,8 +69,11 @@ describe('scoring', () => {
     run.advance(CONFIG.level.countdownSec);
     const shot = run.fireShot(0, 0);
     expect(run.awardHit('witch', 'medium', 'near', shot, true)).toBe(150);
-    expect(shot).toMatchObject({ target: 'witch', zone: 'near', points: 150 });
+    expect(shot).toMatchObject({ target: 'witch', zone: 'near', points: 150, headshot: true });
     expect(run.levelScore).toBe(150);
+    const body = run.fireShot(0, 0);
+    run.awardHit('frankenstein', 'large', 'near', body);
+    expect(body).toMatchObject({ target: 'frankenstein', points: 10, headshot: false });
   });
 
   it('uses explicit size classes per target type', () => {
@@ -309,7 +312,7 @@ describe('shot log and accuracy', () => {
     const hit = run.fireShot(0.3, 0.05)!;
     const pts = pointsFor('witch', 'medium', 'far');
     expect(run.awardHit('witch', 'medium', 'far', hit)).toBe(pts);
-    expect(miss).toEqual({ ms: 1500, yaw: 0.25, pitch: -0.1, target: null, zone: null, points: 0 });
+    expect(miss).toEqual({ ms: 1500, yaw: 0.25, pitch: -0.1, target: null, zone: null, points: 0, headshot: false });
     expect(hit).toMatchObject({ ms: 1500, target: 'witch', zone: 'far', points: pts });
     expect(run.shots).toEqual([miss, hit]);
     expect(run.levelHits).toBe(1);

@@ -134,12 +134,12 @@ costs the same few hundred rows whether the history holds a hundred runs or a mi
   the badge still says which board was made. Maps and Career need the host's boards; with the host
   unreachable only level bests (cached) and the local scoreboard can ask.
 - **Shots and accuracy:** every pumpkin fired is logged with its time into the level, aim
-  (yaw/pitch), what it hit (target kind and range zone, or a miss) and the points. A pumpkin
-  scores at most one hit; one still flying when the level ends is a miss. Accuracy = hits ÷ shots,
-  shown on the results (this level), game over (this run), the Scoreboard and Maps rows and the
-  Career rows. Run and career accuracy count every shot, replayed attempts included. Each level's
-  log is stored as one JSON column (`attempts.shot_log`, with `shots`/`hits` counts beside it);
-  the `shots` SQL view unpacks it to one row per shot for analysis.
+  (yaw/pitch), what it hit (target kind and range zone, or a miss), the points and whether it was
+  a headshot. A pumpkin scores at most one hit; one still flying when the level ends is a miss.
+  Accuracy = hits ÷ shots, shown on the results (this level), game over (this run), the Scoreboard
+  and Maps rows and the Career rows. Run and career accuracy count every shot, replayed attempts
+  included. Each level's log is stored as one JSON column (`attempts.shot_log`, with `shots`/`hits`
+  counts beside it); the `shots` SQL view unpacks it to one row per shot for analysis.
 - Names are cleaned the same way on both sides (whitespace collapsed, control characters
   removed, max 16 characters) and are always rendered as text.
 - Names are an allowlist, checked by `src/core/names.mjs` in the game and again by the host:

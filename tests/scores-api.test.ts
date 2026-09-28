@@ -26,8 +26,8 @@ const attempt = (runId: string, n: number, level: number, score: number, complet
 });
 /** A shot log as the game sends it: `hits` far witch hits, then `misses` misses. */
 const shotLog = (hits: number, misses: number) => [
-  ...Array.from({ length: hits }, (_, i) => [1000 * i, 0.1, 0.05, 'witch', 'far', 45]),
-  ...Array.from({ length: misses }, (_, i) => [500 + 1000 * i, -0.2, 0.3, null, null, 0]),
+  ...Array.from({ length: hits }, (_, i) => [1000 * i, 0.1, 0.05, 'witch', 'far', 85, 0]),
+  ...Array.from({ length: misses }, (_, i) => [500 + 1000 * i, -0.2, 0.3, null, null, 0, 0]),
 ];
 
 describe('scores database', () => {
@@ -257,9 +257,11 @@ describe('shots and the Maps board', () => {
         shots(5, [[0, 0, 0, '<b>', 'far', 5]]),
         shots(6, Array.from({ length: 1001 }, () => [0, 0, 0, null, null, 0])),
         shots(7, 'lots'),
+        shots(8, [[0, 0, 0, null, null, 0, 1]]), // a headshot that missed
+        shots(9, [[0, 0, 0, 'witch', 'far', 170, true]]), // the flag is 0 or 1
       ],
     });
-    expect(r).toEqual({ accepted: 2, rejected: 6 });
+    expect(r).toEqual({ accepted: 2, rejected: 8 });
     expect((await db.boards()).runs[0]).toMatchObject({ score: 10, shots: 0, hits: 0 });
   });
 
@@ -279,14 +281,19 @@ describe('shots and the Maps board', () => {
 
       db = openScores(file);
       expect((await db.boards()).runs).toEqual([{ runId: 'run-old0-0001', name: 'Hudson', score: 300, level: 1, shots: 0, hits: 0 }]);
-      await db.sync({ device: phone, events: [attempt('run-old0-0001', 2, 2, 45, true, 'Graveyard', shotLog(1, 1))] });
-      expect((await db.boards()).runs[0]).toMatchObject({ score: 345, shots: 2, hits: 1 });
+      await db.sync({ device: phone, events: [attempt('run-old0-0001', 2, 2, 85, true, 'Graveyard', shotLog(1, 1))] });
+      // A game from before the headshot flag sends six-item shots.
+      await db.sync({ device: phone, events: [attempt('run-old0-0001', 3, 3, 170, true, 'Graveyard', [[0, 0, 0, 'witch', 'far', 170]])] });
+      await db.sync({ device: phone, events: [attempt('run-old0-0001', 4, 4, 170, true, 'Graveyard', [[0, 0, 0, 'witch', 'far', 170, 1]])] });
+      expect((await db.boards()).runs[0]).toMatchObject({ score: 725, shots: 4, hits: 3 });
       db.close();
 
       const raw = new DatabaseSync(file);
-      expect(raw.prepare('SELECT attempt, shot, ms, yaw, pitch, target, zone, points FROM shots ORDER BY attempt, shot').all()).toEqual([
-        { attempt: 2, shot: 1, ms: 0, yaw: 0.1, pitch: 0.05, target: 'witch', zone: 'far', points: 45 },
-        { attempt: 2, shot: 2, ms: 500, yaw: -0.2, pitch: 0.3, target: null, zone: null, points: 0 },
+      expect(raw.prepare('SELECT attempt, shot, ms, yaw, pitch, target, zone, points, headshot FROM shots ORDER BY attempt, shot').all()).toEqual([
+        { attempt: 2, shot: 1, ms: 0, yaw: 0.1, pitch: 0.05, target: 'witch', zone: 'far', points: 85, headshot: 0 },
+        { attempt: 2, shot: 2, ms: 500, yaw: -0.2, pitch: 0.3, target: null, zone: null, points: 0, headshot: 0 },
+        { attempt: 3, shot: 1, ms: 0, yaw: 0, pitch: 0, target: 'witch', zone: 'far', points: 170, headshot: null },
+        { attempt: 4, shot: 1, ms: 0, yaw: 0, pitch: 0, target: 'witch', zone: 'far', points: 170, headshot: 1 },
       ]);
       raw.close();
     } finally {

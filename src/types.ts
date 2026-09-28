@@ -54,6 +54,8 @@ export interface ShotRecord {
   target: TargetKind | null;
   zone: RangeZone | null;
   points: number;
+  /** It hit a Frankenstein's or witch's head zone (scored double). */
+  headshot: boolean;
 }
 
 export interface Settings {

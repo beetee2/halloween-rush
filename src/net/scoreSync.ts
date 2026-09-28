@@ -4,8 +4,8 @@ import type { DeviceInfo } from './device';
 type StorageLike = Pick<Storage, 'getItem' | 'setItem'>;
 type Http = (url: string, init: RequestInit) => Promise<Response>;
 
-/** A shot as sent to the host: [ms into the level, yaw, pitch, target | null, range zone | null, points]. */
-export type ShotTuple = [ms: number, yaw: number, pitch: number, target: TargetKind | null, zone: RangeZone | null, points: number];
+/** A shot as sent to the host: [ms into the level, yaw, pitch, target | null, range zone | null, points, headshot]. */
+export type ShotTuple = [ms: number, yaw: number, pitch: number, target: TargetKind | null, zone: RangeZone | null, points: number, headshot: 0 | 1];
 
 /** What a device reports to the scores database (see scripts/scores-core.mjs). */
 export type SyncEvent =
@@ -16,7 +16,7 @@ export type SyncEvent =
 const round3 = (v: number) => Math.round(v * 1000) / 1000;
 
 export function shotTuple(s: ShotRecord): ShotTuple {
-  return [s.ms, round3(s.yaw), round3(s.pitch), s.target, s.zone, s.points];
+  return [s.ms, round3(s.yaw), round3(s.pitch), s.target, s.zone, s.points, s.headshot ? 1 : 0];
 }
 
 export interface RunRow {

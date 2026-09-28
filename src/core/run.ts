@@ -141,7 +141,7 @@ export class RunModel {
   /** A pumpkin left the launcher. Returns its record so a hit can be filled in later (null if not playing). */
   fireShot(yaw: number, pitch: number): ShotRecord | null {
     if (!this.acceptsCombat) return null;
-    const shot: ShotRecord = { ms: Math.round((this.cfg.level.durationSec - this.timeRemaining) * 1000), yaw, pitch, target: null, zone: null, points: 0 };
+    const shot: ShotRecord = { ms: Math.round((this.cfg.level.durationSec - this.timeRemaining) * 1000), yaw, pitch, target: null, zone: null, points: 0, headshot: false };
     this.shots.push(shot);
     this.runShots += 1;
     return shot;
@@ -157,7 +157,7 @@ export class RunModel {
     this.levelScore += pts;
     this.levelInventory[CANDY_FOR_TARGET[kind]] += 1;
     if (shot && shot.target === null) {
-      Object.assign(shot, { target: kind, zone, points: pts });
+      Object.assign(shot, { target: kind, zone, points: pts, headshot });
       this.runHits += 1;
     }
     return pts;

@@ -94,11 +94,13 @@ const DERIVED = [
   `CREATE VIEW kept_attempts AS
     SELECT a.* FROM attempts a
     WHERE a.attempt = (SELECT MAX(b.attempt) FROM attempts b WHERE b.run_id = a.run_id AND b.level = a.level)`,
-  // One row per shot. target/zone are NULL for a miss; aim is radians (yaw left+, pitch up+).
+  // One row per shot. target/zone are NULL for a miss; aim is radians (yaw left+, pitch up+);
+  // headshot is 1 or 0, NULL for games from before the flag.
   `CREATE VIEW shots AS
     SELECT a.run_id, a.attempt, a.level, a.map, s.key + 1 AS shot,
            json_extract(s.value, '$[0]') AS ms, json_extract(s.value, '$[1]') AS yaw, json_extract(s.value, '$[2]') AS pitch,
-           json_extract(s.value, '$[3]') AS target, json_extract(s.value, '$[4]') AS zone, json_extract(s.value, '$[5]') AS points
+           json_extract(s.value, '$[3]') AS target, json_extract(s.value, '$[4]') AS zone, json_extract(s.value, '$[5]') AS points,
+           json_extract(s.value, '$[6]') AS headshot
     FROM attempts a, json_each(a.shot_log) s`,
 
   // Each run with at least one level. score sums the kept attempts; accuracy counts every shot,
@@ -236,15 +238,20 @@ const int = (v, lo, hi) => (Number.isInteger(v) && v >= lo && v <= hi ? v : null
 const id = (v) => (typeof v === 'string' && ID.test(v) ? v : null);
 const angle = (v) => (typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= 10 ? Math.round(v * 1000) / 1000 : null);
 
-/** One shot as the game sends it: [ms into the level, yaw, pitch, target kind | null, range zone | null, points]. */
+/**
+ * One shot as the game sends it: [ms into the level, yaw, pitch, target kind | null, range zone | null, points,
+ * headshot 0 | 1]. Games from before the headshot flag send the first six.
+ */
 function shot(v) {
-  if (!Array.isArray(v) || v.length !== 6) return null;
-  const [ms, rawYaw, rawPitch, target, zone, points] = v;
+  if (!Array.isArray(v) || (v.length !== 6 && v.length !== 7)) return null;
+  const [ms, rawYaw, rawPitch, target, zone, points, headshot] = v;
   const yaw = angle(rawYaw);
   const pitch = angle(rawPitch);
   if (int(ms, 0, 3_600_000) === null || yaw === null || pitch === null || int(points, 0, 10_000) === null) return null;
-  if (target === null) return zone === null && points === 0 ? [ms, yaw, pitch, null, null, 0] : null;
-  return typeof target === 'string' && WORD.test(target) && typeof zone === 'string' && WORD.test(zone) ? [ms, yaw, pitch, target, zone, points] : null;
+  if (v.length === 7 && headshot !== 0 && headshot !== 1) return null;
+  const head = v.length === 7 ? [headshot] : [];
+  if (target === null) return zone === null && points === 0 && !headshot ? [ms, yaw, pitch, null, null, 0, ...head] : null;
+  return typeof target === 'string' && WORD.test(target) && typeof zone === 'string' && WORD.test(zone) ? [ms, yaw, pitch, target, zone, points, ...head] : null;
 }
 
 /** A level's shots, or null if malformed. Games from before shot tracking send none. */

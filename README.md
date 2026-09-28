@@ -202,7 +202,8 @@ Development servers use `data/dev-scores.sqlite` so testing never lands on the f
 The deployed game keeps the same tables in Cloudflare D1 (above).
 Tables: `devices`, `runs` and `attempts` (one row per level played, with `shots`, `hits` and a
 `shot_log` of every shot). The `shots` view lists one row per shot: time into the level (`ms`),
-aim (`yaw`/`pitch` in radians), `target` and range `zone` (both empty for a miss) and `points`.
+aim (`yaw`/`pitch` in radians), `target` and range `zone` (both empty for a miss), `points` and
+`headshot` (1 or 0; empty for games from before it was recorded).
 Older database files gain the shot columns automatically. For example:
 `sqlite3 data/halloween-rush.sqlite "select label, name, datetime(last_seen/1000,'unixepoch') from devices"`,
 or shots per kind of target: `sqlite3 data/halloween-rush.sqlite "select target, count(*) from shots group by target"`.

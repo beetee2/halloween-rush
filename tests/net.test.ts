@@ -136,8 +136,8 @@ describe('score sync outbox', () => {
   });
 
   it('sends shots compactly, aim rounded to a thousandth of a radian', () => {
-    expect(shotTuple({ ms: 1500, yaw: 0.123456, pitch: -0.0104, target: 'witch', zone: 'far', points: 45 })).toEqual([1500, 0.123, -0.01, 'witch', 'far', 45]);
-    expect(shotTuple({ ms: 0, yaw: 1, pitch: 0.5, target: null, zone: null, points: 0 })).toEqual([0, 1, 0.5, null, null, 0]);
+    expect(shotTuple({ ms: 1500, yaw: 0.123456, pitch: -0.0104, target: 'witch', zone: 'far', points: 170, headshot: true })).toEqual([1500, 0.123, -0.01, 'witch', 'far', 170, 1]);
+    expect(shotTuple({ ms: 0, yaw: 1, pitch: 0.5, target: null, zone: null, points: 0, headshot: false })).toEqual([0, 1, 0.5, null, null, 0, 0]);
   });
 
   it('reads the Maps board and accuracy, and accepts a host from before them', () => {
