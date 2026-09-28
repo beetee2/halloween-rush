@@ -80,6 +80,12 @@ export class GamepadReader {
   private down: boolean[] = [];
   private nav: { dir: Dir; stick: boolean; next: number } | null = null;
 
+  /**
+   * `flipY`: the browser reports stick up as positive, the opposite of the standard layout.
+   * Edge on Xbox does (players there found the view inverted), so it is set for Xbox.
+   */
+  constructor(private readonly flipY = false) {}
+
   /** `now` in seconds, for menu auto-repeat. */
   read(pads: ArrayLike<PadLike | null>, now: number): PadFrame {
     const down: boolean[] = [];
@@ -87,18 +93,19 @@ export class GamepadReader {
     let aimY = 0;
     let navX = 0;
     let navY = 0;
+    const fy = this.flipY ? -1 : 1;
     for (let i = 0; i < pads.length; i++) {
       const p = pads[i];
       if (!p || p.mapping !== 'standard') continue;
       p.buttons.forEach((b, j) => {
         if (b.pressed) down[j] = true;
       });
-      const [lx, ly] = shapeStick(p.axes[0] ?? 0, p.axes[1] ?? 0);
-      const [rx, ry] = shapeStick(p.axes[2] ?? 0, p.axes[3] ?? 0);
+      const [lx, ly] = shapeStick(p.axes[0] ?? 0, fy * (p.axes[1] ?? 0));
+      const [rx, ry] = shapeStick(p.axes[2] ?? 0, fy * (p.axes[3] ?? 0));
       aimX += lx + rx;
       aimY += ly + ry;
       navX += p.axes[0] ?? 0;
-      navY += p.axes[1] ?? 0;
+      navY += fy * (p.axes[1] ?? 0);
     }
     const was = this.down;
     this.down = down;

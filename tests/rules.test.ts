@@ -207,7 +207,7 @@ describe('persistence', () => {
     const mem = memory();
     const store = new SaveStore(() => mem, 'k');
     const data = {
-      settings: { volume: 0.3, muted: true, aimSensitivity: 1.7 },
+      settings: { volume: 0.3, muted: true, aimSensitivity: 1.7, invertPadY: true, invertPadX: false },
       bests: { bestRunScore: 1234, furthestLevel: 6 },
       scoreboard: [
         { name: 'Hudson', score: 1234, level: 7 },

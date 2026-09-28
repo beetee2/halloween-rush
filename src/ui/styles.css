@@ -322,6 +322,7 @@ body.touch .hud-candy {
 
 body.touch .how-desktop,
 body.touch .how-pad,
+body.touch .pad-setting,
 body:not(.touch) .how-touch {
   display: none;
 }

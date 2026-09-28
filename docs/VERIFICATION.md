@@ -85,7 +85,10 @@ that hit and `CONFIG`, because the seeded candy spot decides the range bonus.
     title's Full screen button enters and exits full screen; A presses the focused Start button;
     the mouse is never captured; right stick right turns right and up looks up; a held RT
     repeats fire; Menu pauses; the D-pad moves focus between the pause buttons; A held through
-    Resume does not fire, a fresh A press does; a mouse click after a second hands control back.
+    Resume does not fire, a fresh A press does; Settings → "Controller: invert up/down" reached
+    and ticked with the D-pad and A flips the stick; a mouse click after a second hands control back.
+15. **Edge on Xbox** (Xbox user agent): the stick's up/down sign is corrected, so pushing up still
+    looks up.
 
 ## Screenshot review
 
@@ -121,9 +124,11 @@ launcher (lower right), the candy bag (lower left) and the touch FIRE button all
   events, which is not proof of iOS Safari or Android Chrome behaviour (safe areas, audio unlock,
   touch latency, performance).
 - **No Firefox, Safari/WebKit or hardware-GPU Chromium** runs. All automated rendering was software (SwiftShader).
-- **No real controller or Xbox.** Gamepad input was simulated in headless Chromium. Edge on Xbox
-  (browsing vs game controls, whether a gamepad press counts as a click for full screen and
-  sound) is taken from Microsoft's documentation, not tried.
+- **No real controller or Xbox** in automated runs. Gamepad input was simulated in headless
+  Chromium. Edge on Xbox (browsing vs game controls, whether a gamepad press counts as a click for
+  full screen and sound) is taken from Microsoft's documentation. On a real Xbox, players found
+  full screen and firing working and the look inverted; the up/down correction for Xbox follows
+  from that report (the axis was not confirmed), with invert settings as the fallback.
 - **No second household device connected** over the LAN. The LAN address was only exercised from
   the host itself (`verify:serve`), so firewall and Wi-Fi isolation on a real network are untested.
 - **Performance was not measured** on any real device. Headless SwiftShader ran at roughly 20 fps

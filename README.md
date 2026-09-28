@@ -55,12 +55,16 @@ pauses. In portrait the game pauses and asks you to rotate. Fullscreen is never 
 stick works too; push up to look up, never inverted). **RT** or **A** fires (bumpers and LT too);
 hold to repeat. **☰ Menu** pauses and resumes. In menus the **D-pad** or left stick moves between
 buttons (left/right move sliders) and **A** presses. Aim sensitivity in Settings applies to the
-sticks. While a controller is in use the mouse isn't captured.
+sticks, and Settings has **Controller: invert up/down** and **invert left/right** for players who
+want it the other way (or a browser that reports a stick backwards). Edge on Xbox reports up/down
+the opposite way to other browsers; the game corrects that on Xbox. While a controller is in
+use the mouse isn't captured.
 
 **Full screen:** the **Full screen** button on the title and pause screens (hidden where the
 browser can't do it, such as iPhones).
 
-**Settings** (title or pause screen): volume, mute, aim sensitivity, and this device's name and ID.
+**Settings** (title or pause screen): volume, mute, aim sensitivity, controller invert
+up/down and left/right (not on touch screens), and this device's name and ID.
 Settings and personal bests are saved in the browser.
 
 ## Names and leaderboards
@@ -112,7 +116,8 @@ level best and counts toward map averages.
    to browsing controls. **Exit full screen** is on the title and pause screens.
 
 In browsing controls Edge keeps the buttons for itself (B goes back a page, the bumpers switch
-tabs), so play in game controls.
+tabs), so play in game controls. If aiming feels backwards, pause (☰ Menu) → **Settings** and
+tick **Controller: invert up/down** or **invert left/right**; it is saved on the console.
 
 ## Play full screen on a phone (Home Screen)
 

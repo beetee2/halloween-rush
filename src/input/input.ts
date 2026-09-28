@@ -48,6 +48,9 @@ export class InputManager {
   /** When false, aim and fire input is ignored (menus, results, teleport). */
   enabled = false;
   sensitivity = 1;
+  /** Player settings: flip the controller sticks' left/right or up/down. */
+  invertPadX = false;
+  invertPadY = false;
   yaw = 0;
   pitch = 0;
   locked = false;
@@ -59,7 +62,7 @@ export class InputManager {
   private touchFireId: number | null = null;
   /** A controller fire button pressed during play and still held. */
   private padFire = false;
-  private readonly pad = new GamepadReader();
+  private readonly pad = new GamepadReader(/\bXbox\b/.test(navigator.userAgent));
   /** performance.now() of the last controller input. */
   private padActiveAt = -Infinity;
   /** A Space/F press that started during play and has not been released yet. */
@@ -181,7 +184,7 @@ export class InputManager {
     const playing = this.enabled;
     if (f.firePressed || f.pause || f.menu.length) this.cb.onGesture();
     if (playing) {
-      this.turn(f.aimX, f.aimY, CONFIG.aim.padRadPerSec * dt);
+      this.turn(this.invertPadX ? -f.aimX : f.aimX, this.invertPadY ? -f.aimY : f.aimY, CONFIG.aim.padRadPerSec * dt);
       // Only a press that began during play fires, so holding A through Resume doesn't.
       if (f.firePressed) {
         this.padFire = true;

@@ -2,7 +2,7 @@ import { CONFIG } from '../config';
 import { accuracy, DEFAULT_NAME, scoreboardName } from '../core/scoreboard';
 import type { PadMenuAction } from '../input/gamepad';
 import type { InputMode } from '../input/input';
-import type { Bests, CandyKind, Inventory, SizeClass } from '../types';
+import type { Bests, CandyKind, Inventory, Settings, SizeClass } from '../types';
 import { CANDY_KINDS } from '../types';
 import { BoardPanel, type BoardsView } from './boards';
 
@@ -510,24 +510,30 @@ export class UI {
     $('pause-sub').textContent = text;
   }
 
-  bindSettings(initial: { volume: number; muted: boolean; aimSensitivity: number }, storageOk: boolean, onChange: (s: { volume: number; muted: boolean; aimSensitivity: number }) => void): void {
+  bindSettings(initial: Settings, storageOk: boolean, onChange: (s: Settings) => void): void {
     const vol = $('set-volume') as HTMLInputElement;
     const mute = $('set-mute') as HTMLInputElement;
     const sens = $('set-sens') as HTMLInputElement;
+    const invertY = $('set-invert-y') as HTMLInputElement;
+    const invertX = $('set-invert-x') as HTMLInputElement;
     const out = $('set-sens-out');
     vol.value = String(initial.volume);
     mute.checked = initial.muted;
     sens.value = String(initial.aimSensitivity);
+    invertY.checked = initial.invertPadY;
+    invertX.checked = initial.invertPadX;
     out.textContent = `${initial.aimSensitivity.toFixed(2)}×`;
     $('set-storage').textContent = storageOk
       ? 'Settings, best scores and the scoreboard are saved in this browser for this address.'
       : 'This browser is not allowing saves, so settings and scores last until you close the page.';
     const emit = () => {
       out.textContent = `${Number(sens.value).toFixed(2)}×`;
-      onChange({ volume: Number(vol.value), muted: mute.checked, aimSensitivity: Number(sens.value) });
+      onChange({ volume: Number(vol.value), muted: mute.checked, aimSensitivity: Number(sens.value), invertPadY: invertY.checked, invertPadX: invertX.checked });
     };
     vol.addEventListener('input', emit);
     mute.addEventListener('change', emit);
     sens.addEventListener('input', emit);
+    invertY.addEventListener('change', emit);
+    invertX.addEventListener('change', emit);
   }
 }

@@ -260,6 +260,8 @@ export class Game {
     this.settings = { ...s };
     this.audio.setVolume(s.volume, s.muted);
     this.input.sensitivity = s.aimSensitivity;
+    this.input.invertPadX = s.invertPadX;
+    this.input.invertPadY = s.invertPadY;
     if (persist) this.persist();
   }
 

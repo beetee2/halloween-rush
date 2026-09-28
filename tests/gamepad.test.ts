@@ -24,6 +24,13 @@ describe('controller input', () => {
     expect(r.read([pad([], [0, 0, 0, -1])], 0.1)).toMatchObject({ aimX: 0, aimY: -1, active: true });
   });
 
+  it('flips up/down for a browser that reports stick up as positive (Edge on Xbox)', () => {
+    const r = new GamepadReader(true);
+    expect(r.read([pad([], [0, 0, 0, 1])], 0).aimY).toBe(-1);
+    expect(r.read([pad([], [0, 0, 1, 0])], 0.1).aimX).toBe(1);
+    expect(r.read([pad([], [0, 0.9, 0, 0])], 0.2).menu).toEqual(['up']);
+  });
+
   it('fires from A, bumpers and triggers, reporting fresh presses once', () => {
     for (const b of [PAD.A, PAD.LB, PAD.RB, PAD.LT, PAD.RT]) {
       const r = new GamepadReader();
