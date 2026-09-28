@@ -457,6 +457,117 @@ test('desktop drag fallback when pointer lock is unavailable', async ({ page }) 
   expect(errors).toEqual([]);
 });
 
+test('Xbox controller: menus, right-stick aim (not inverted), trigger fire, Menu pauses; full screen', async ({ page }) => {
+  // A fake standard-mapping controller that the test drives through window.__pad.
+  await page.addInitScript(() => {
+    const pad = {
+      id: 'Xbox Wireless Controller (STANDARD GAMEPAD)',
+      index: 0,
+      connected: true,
+      mapping: 'standard',
+      timestamp: 0,
+      axes: [0, 0, 0, 0],
+      buttons: Array.from({ length: 17 }, () => ({ pressed: false, touched: false, value: 0 })),
+    };
+    (window as any).__pad = pad;
+    Object.defineProperty(navigator, 'getGamepads', { configurable: true, value: () => [pad, null, null, null] });
+  });
+  const setButton = (b: number, down: boolean) =>
+    page.evaluate(([i, d]) => {
+      const btn = (window as any).__pad.buttons[i as number];
+      btn.pressed = d;
+      btn.value = d ? 1 : 0;
+    }, [b, down] as const);
+  const setAxes = (axes: number[]) => page.evaluate((a) => ((window as any).__pad.axes = a), axes);
+  /** Wait for `n` animation frames: the game reads the controller once per frame (slow in SwiftShader). */
+  const frames = (n: number) =>
+    page.evaluate(
+      (k) =>
+        new Promise<void>((done) => {
+          let i = 0;
+          const f = () => (++i >= k ? done() : requestAnimationFrame(f));
+          requestAnimationFrame(f);
+        }),
+      n,
+    );
+  const press = async (b: number) => {
+    await setButton(b, true);
+    await frames(3);
+    await setButton(b, false);
+    await frames(3);
+  };
+  const A = 0;
+  const RT = 7;
+  const MENU = 9;
+  const UP = 12;
+  const DOWN = 13;
+
+  const errors = await open(page);
+  // Full screen from the title (a real click, as with the cursor in Edge on Xbox).
+  await expect(page.locator('#btn-fullscreen-title')).toBeVisible();
+  await page.click('#btn-fullscreen-title');
+  await expect.poll(() => page.evaluate(() => document.fullscreenElement !== null)).toBe(true);
+  await expect(page.locator('#btn-fullscreen-title')).toHaveText('Exit full screen');
+  await page.click('#btn-fullscreen-title');
+  await expect.poll(() => page.evaluate(() => document.fullscreenElement === null)).toBe(true);
+
+  // A presses the focused Start button; the controller never asks for the mouse.
+  await page.locator('#btn-start').focus();
+  await press(A);
+  await skipCountdown(page);
+  let s = await state(page);
+  expect(s.mode).toBe('gamepad');
+  expect(s.locked).toBe(false);
+  await expect(page.locator('body')).toHaveClass(/\bpad\b/);
+  await expect(page.locator('#hud-hint')).toBeHidden();
+  await page.evaluate(() => {
+    window.__HR__.setSpawning(false);
+    window.__HR__.clearTargets();
+  });
+
+  // Right stick right turns right (yaw falls, as with the mouse); up looks up.
+  const y0 = s.yaw;
+  await setAxes([0, 0, 1, 0]);
+  await frames(10);
+  await setAxes([0, 0, 0, -1]);
+  await frames(10);
+  await setAxes([0, 0, 0, 0]);
+  await frames(2);
+  s = await state(page);
+  expect(s.yaw).toBeLessThan(y0 - 0.1);
+  expect(s.pitch).toBeGreaterThan(0.1);
+
+  // RT fires; holding it repeats.
+  await setButton(RT, true);
+  await expect.poll(async () => (await state(page)).shots).toBeGreaterThanOrEqual(2);
+  await setButton(RT, false);
+
+  // Menu pauses; the D-pad moves between the pause buttons and A presses one.
+  await press(MENU);
+  await waitPhase(page, 'paused');
+  await expect(page.locator('#btn-resume')).toBeFocused();
+  await press(DOWN);
+  await expect(page.locator('#btn-settings-pause')).toBeFocused();
+  await press(UP);
+  await expect(page.locator('#btn-resume')).toBeFocused();
+  // Holding A through Resume must not fire as play restarts.
+  const shots = (await state(page)).shots;
+  await setButton(A, true);
+  await waitPhase(page, 'playing');
+  await page.waitForTimeout(600);
+  expect((await state(page)).shots).toBe(shots);
+  await setButton(A, false);
+  await frames(3);
+  await press(A);
+  await expect.poll(async () => (await state(page)).shots).toBe(shots + 1);
+
+  // Back on the mouse after a moment: it aims again.
+  await page.waitForTimeout(1100);
+  await page.mouse.click(640, 360);
+  await expect.poll(async () => (await state(page)).mode).toBe('mouse');
+  expect(errors).toEqual([]);
+});
+
 async function touchContext(browser: Browser, width = 844, height = 390): Promise<BrowserContext> {
   return browser.newContext({ viewport: { width, height }, hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
 }

@@ -156,14 +156,15 @@ export class Game {
         onPauseRequest: () => this.togglePause(),
         onLockLost: () => this.autoPause('The mouse was released. Click Resume to keep playing.'),
         onModeChange: (m) => {
-          this.ui.setTouchMode(m === 'touch');
+          this.ui.setInputMode(m);
           this.checkOrientation();
         },
         onGesture: () => this.audio.unlock(),
+        onPadMenu: (a) => this.ui.padMenu(a),
       },
       opts.touchDevice,
     );
-    this.ui.setTouchMode(opts.touchDevice);
+    this.ui.setInputMode(this.input.mode);
     this.applySettings(this.settings, false);
     this.bindUi();
     this.bindWindow(opts.canvas);
@@ -223,6 +224,8 @@ export class Game {
     click('btn-boards-done', () => ui.show('title'));
     click('btn-settings-pause', () => ui.openSettings());
     click('btn-settings-done', () => ui.closeSettings());
+    click('btn-fullscreen-title', () => ui.toggleFullscreen());
+    click('btn-fullscreen-pause', () => ui.toggleFullscreen());
     const pauseBtn = document.getElementById('btn-pause')!;
     pauseBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
     click('btn-pause', () => this.togglePause());
@@ -619,6 +622,7 @@ export class Game {
     const dt = Math.min(CONFIG.sim.maxFrameSec, Math.max(0, (now - this.lastFrame) / 1000));
     this.lastFrame = now;
     this.time += dt;
+    this.input.pollGamepads(dt);
     const phase = this.run.phase;
 
     if (phase === 'title') {

@@ -321,6 +321,7 @@ body.touch .hud-candy {
 }
 
 body.touch .how-desktop,
+body.touch .how-pad,
 body:not(.touch) .how-touch {
   display: none;
 }
@@ -597,7 +598,8 @@ h2 {
 }
 
 .btn:focus-visible,
-.icon-btn:focus-visible {
+.icon-btn:focus-visible,
+body.pad .screen :is(button, input, a):focus {
   outline: 3px solid #7dff9a;
   outline-offset: 2px;
 }
@@ -616,6 +618,10 @@ h2 {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
+}
+
+.btn-row .wide {
+  grid-column: 1 / -1;
 }
 
 .stat-row {

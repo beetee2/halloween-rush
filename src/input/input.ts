@@ -1,6 +1,14 @@
 import { CONFIG } from '../config';
+import { GamepadReader, type PadMenuAction } from './gamepad';
 
-export type InputMode = 'mouse' | 'touch';
+export type InputMode = 'mouse' | 'touch' | 'gamepad';
+
+/**
+ * Mouse input on the play area is ignored this long after the last controller input. TV
+ * browsers (Edge on Xbox) can turn the controller into an emulated mouse as well, and the two
+ * would fight over the view.
+ */
+const PAD_MOUSE_GRACE_MS = 1000;
 
 export interface InputCallbacks {
   /** Escape/P key or the pause button. */
@@ -10,6 +18,8 @@ export interface InputCallbacks {
   onModeChange(mode: InputMode): void;
   /** Any user gesture (used to unlock audio). */
   onGesture(): void;
+  /** A controller press in the menus (D-pad/left stick or A) while aim and fire are off. */
+  onPadMenu(action: PadMenuAction): void;
 }
 
 interface AimPointer {
@@ -25,11 +35,13 @@ interface AimPointer {
 const deg = (d: number) => (d * Math.PI) / 180;
 
 /**
- * Mouse, keyboard and touch input.
+ * Mouse, keyboard, touch and controller input.
  * - Desktop: pointer lock when granted (click/hold to fire); otherwise drag-to-aim with
  *   click or Space to fire.
  * - Touch: drag anywhere on the play area to aim, hold the separate fire button to fire.
  *   Pointers are tracked by id so aiming and firing work simultaneously.
+ * - Controller (polled each frame by `pollGamepads`): either stick aims, A/bumpers/triggers
+ *   fire, Menu pauses; in menus the D-pad or left stick moves and A presses.
  */
 export class InputManager {
   mode: InputMode;
@@ -45,6 +57,11 @@ export class InputManager {
   private mouseFire = false;
   private keyFire = false;
   private touchFireId: number | null = null;
+  /** A controller fire button pressed during play and still held. */
+  private padFire = false;
+  private readonly pad = new GamepadReader();
+  /** performance.now() of the last controller input. */
+  private padActiveAt = -Infinity;
   /** A Space/F press that started during play and has not been released yet. */
   private fireKeyFromPlay = false;
   private aim: AimPointer | null = null;
@@ -131,7 +148,51 @@ export class InputManager {
   private setMode(mode: InputMode): void {
     if (this.mode === mode) return;
     this.mode = mode;
+    // Controllers aim without the mouse: let go of it so an emulated one can't also turn the view.
+    if (mode === 'gamepad') this.exitLock();
     this.cb.onModeChange(mode);
+  }
+
+  /** A controller was used just now, so mouse input on the play area is probably emulated. */
+  private get padInUse(): boolean {
+    return performance.now() - this.padActiveAt < PAD_MOUSE_GRACE_MS;
+  }
+
+  /**
+   * Read controllers (the Gamepad API has no events for sticks). Call once per frame,
+   * `dt` in seconds.
+   */
+  pollGamepads(dt: number): void {
+    let pads: ArrayLike<Gamepad | null>;
+    try {
+      pads = navigator.getGamepads?.() ?? [];
+    } catch {
+      return; // blocked by a permissions policy
+    }
+    const now = performance.now();
+    const f = this.pad.read(pads, now / 1000);
+    if (!f.active) {
+      this.padFire = false;
+      return;
+    }
+    this.padActiveAt = now;
+    this.setMode('gamepad');
+    // Read before acting: A on Resume turns input back on, and that press must not also fire.
+    const playing = this.enabled;
+    if (f.firePressed || f.pause || f.menu.length) this.cb.onGesture();
+    if (playing) {
+      this.turn(f.aimX, f.aimY, CONFIG.aim.padRadPerSec * dt);
+      // Only a press that began during play fires, so holding A through Resume doesn't.
+      if (f.firePressed) {
+        this.padFire = true;
+        this.pressLatch = true;
+      }
+      if (!f.fireHeld) this.padFire = false;
+    } else {
+      this.padFire = false;
+      for (const a of f.menu) this.cb.onPadMenu(a);
+    }
+    if (f.pause) this.cb.onPauseRequest();
   }
 
   /** Request pointer lock. Must be called from a user gesture handler. */
@@ -167,7 +228,7 @@ export class InputManager {
   }
 
   get fireHeld(): boolean {
-    return this.enabled && (this.mouseFire || this.keyFire || this.touchFireId !== null);
+    return this.enabled && (this.mouseFire || this.keyFire || this.padFire || this.touchFireId !== null);
   }
 
   /** Returns true once per fresh fire press. */
@@ -181,6 +242,7 @@ export class InputManager {
   clearHeld(): void {
     this.mouseFire = false;
     this.keyFire = false;
+    this.padFire = false;
     this.pressLatch = false;
     if (this.touchFireId !== null) {
       try {
@@ -217,8 +279,16 @@ export class InputManager {
 
   private onSurfaceDown(e: PointerEvent): void {
     this.cb.onGesture();
-    if (e.pointerType === 'mouse') this.setMode('mouse');
-    else this.setMode('touch');
+    if (e.pointerType === 'mouse' && this.padInUse) {
+      e.preventDefault();
+      return;
+    }
+    if (e.pointerType === 'mouse') {
+      const fromPad = this.mode === 'gamepad';
+      this.setMode('mouse');
+      // Back on the mouse mid-level after using a controller: capture it again.
+      if (fromPad && this.enabled) this.requestLock();
+    } else this.setMode('touch');
     if (!this.enabled) return;
     if (e.pointerType === 'mouse') {
       if (this.locked) {
@@ -241,7 +311,7 @@ export class InputManager {
   }
 
   private onSurfaceMove(e: PointerEvent): void {
-    if (!this.enabled) return;
+    if (!this.enabled || (e.pointerType === 'mouse' && this.padInUse)) return;
     if (this.locked && e.pointerType === 'mouse') {
       const m = CONFIG.aim.maxMouseDeltaPx;
       this.turn(Math.max(-m, Math.min(m, e.movementX)), Math.max(-m, Math.min(m, e.movementY)), CONFIG.aim.mouseRadPerPx);

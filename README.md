@@ -51,6 +51,15 @@ capture, drag to aim instead and click (or press Space) to fire.
 round **FIRE** button to shoot. You can aim and fire with two fingers at once. The ⏸ button
 pauses. In portrait the game pauses and asks you to rotate. Fullscreen is never required.
 
+**Controller (Xbox, PlayStation and other standard gamepads):** the right stick aims (the left
+stick works too; push up to look up, never inverted). **RT** or **A** fires (bumpers and LT too);
+hold to repeat. **☰ Menu** pauses and resumes. In menus the **D-pad** or left stick moves between
+buttons (left/right move sliders) and **A** presses. Aim sensitivity in Settings applies to the
+sticks. While a controller is in use the mouse isn't captured.
+
+**Full screen:** the **Full screen** button on the title and pause screens (hidden where the
+browser can't do it, such as iPhones).
+
 **Settings** (title or pause screen): volume, mute, aim sensitivity, and this device's name and ID.
 Settings and personal bests are saved in the browser.
 
@@ -90,6 +99,20 @@ cover everyone who plays there; otherwise the scoreboard falls back to this devi
 Scoring matches the game exactly: a replayed level replaces the earlier attempt in the run
 total and career points (no farming by replaying), though a replayed attempt can still set a
 level best and counts toward map averages.
+
+## Play on Xbox (Microsoft Edge)
+
+1. Open the game in Edge on the console. The controller starts in Edge's browsing controls: the
+   left stick moves a cursor and **A** clicks.
+2. Point at **Full screen** and press **A**. Do this with the cursor: browsers only go full screen
+   (and start sound) after a real click, not a gamepad button.
+3. Hold the **☰ Menu** button until Edge's menu opens and choose **Use game controls**. The game now
+   gets the whole controller (right stick aims, RT fires, D-pad and A in the menus).
+4. To get the cursor back (e.g. to type a name or leave), hold **☰ Menu** again and switch back
+   to browsing controls. **Exit full screen** is on the title and pause screens.
+
+In browsing controls Edge keeps the buttons for itself (B goes back a page, the bumpers switch
+tabs), so play in game controls.
 
 ## Play full screen on a phone (Home Screen)
 
@@ -247,8 +270,12 @@ docs/                  GAME_DESIGN.md, IMPLEMENTATION_PLAN.md, VERIFICATION.md
   See [docs/VERIFICATION.md](docs/VERIFICATION.md).
 - Performance on real devices has not been measured; the target is smooth desktop play and
   practical mobile play with capped pixel ratio, no real-time shadows and bounded effects.
-- No fullscreen button. iPhones can't fullscreen web pages at all; use the Home Screen (above).
-  Android's Home Screen version opens fullscreen. Neither was tried on a real phone.
+- The Full screen button needs the browser's fullscreen support: iPhones can't fullscreen web
+  pages at all; use the Home Screen (above). Android's Home Screen version opens fullscreen.
+  Neither was tried on a real phone.
+- Controller support was tested with a simulated standard gamepad in headless Chromium, not on a
+  real Xbox or controller. The Xbox steps above follow Microsoft's description of Edge's browsing
+  and game controls.
 - The scores API has no passwords. On a home network that's fine, but the deployed game's API is
   on the internet: anyone who finds it can post made-up scores (e.g. with `curl`); names are
   still limited to the allowed ones. Fix a bad entry with `wrangler d1 execute ... --remote`. Don't expose

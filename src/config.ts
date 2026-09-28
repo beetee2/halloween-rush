@@ -74,6 +74,10 @@ export const CONFIG = {
     /** Drag-fallback: a press that moves less than this and releases quickly is a click-to-fire. */
     clickMoveTolerancePx: 8,
     clickMaxSec: 0.35,
+    /** Controller: turn speed with a stick pushed all the way (radians per second at sensitivity 1). */
+    padRadPerSec: 2.2,
+    /** Controller: stick travel ignored around the centre, so a resting stick never drifts the view. */
+    padDeadZone: 0.18,
   },
 
   camera: {
