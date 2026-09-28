@@ -47,8 +47,9 @@ Click or hold the left button to fire, or press **Space** / **F**. Holding fire 
 0.4 s. **Esc** releases the mouse and pauses; **P** also pauses. If the browser refuses pointer
 capture, drag to aim instead and click (or press Space) to fire.
 
-**Touch (phone/tablet):** play in landscape. Drag anywhere on the scene to aim and hold the
-round **FIRE** button to shoot. You can aim and fire with two fingers at once. The ⏸ button
+**Touch (phone/tablet):** play in landscape. Drag on the left half of the screen to aim and
+hold anywhere on the right half to shoot (the round **FIRE** button marks it). You can aim and
+fire with two fingers at once; a finger keeps its job wherever it slides. The ⏸ button
 pauses. In portrait the game pauses and asks you to rotate. Fullscreen is never required.
 Touch shots get a little aim assist: a pumpkin fired from a touch screen hits anything within
 0.4 m of its path instead of 0.22 m (`CONFIG.weapon.touchProjectileRadius`).

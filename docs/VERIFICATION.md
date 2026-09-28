@@ -144,6 +144,7 @@ launcher (lower right), the candy bag (lower left) and the touch FIRE button all
 3. Let a spider throw; shoot one jack-o'-lantern (pumpkin candy) and let one hit (a heart is lost
    and the screen shakes). Press Esc: it pauses and the timer holds. Resume.
 4. Finish the level: check the results totals, Replay (the total returns to the level-start value), then Next Level.
-5. On a phone on the same Wi-Fi, open the URL in landscape. Drag to aim while holding FIRE; rotate
+5. On a phone on the same Wi-Fi, open the URL in landscape. Drag the left half to aim while holding
+   anywhere on the right half to fire (the FIRE button included); rotate
    to portrait (prompt + pause); rotate back and Resume. Confirm sound after the first tap.
 6. Play on two devices at once and confirm the scores are independent.

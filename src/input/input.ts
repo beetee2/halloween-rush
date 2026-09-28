@@ -38,8 +38,9 @@ const deg = (d: number) => (d * Math.PI) / 180;
  * Mouse, keyboard, touch and controller input.
  * - Desktop: pointer lock when granted (click/hold to fire); otherwise drag-to-aim with
  *   click or Space to fire.
- * - Touch: drag anywhere on the play area to aim, hold the separate fire button to fire.
- *   Pointers are tracked by id so aiming and firing work simultaneously.
+ * - Touch: drag on the left half of the play area to aim; hold anywhere on the right half
+ *   (or the fire button) to fire. Pointers are tracked by id so aiming and firing work
+ *   simultaneously, and a finger keeps its role wherever it moves.
  * - Controller (polled each frame by `pollGamepads`): either stick aims, A/bumpers/triggers
  *   fire, Menu pauses; in menus the D-pad or left stick moves and A presses.
  */
@@ -59,7 +60,8 @@ export class InputManager {
   private pressLatch = false;
   private mouseFire = false;
   private keyFire = false;
-  private touchFireId: number | null = null;
+  /** Touch pointers holding fire, with the element that captured each one. */
+  private readonly touchFire = new Map<number, HTMLElement>();
   /** A controller fire button pressed during play and still held. */
   private padFire = false;
   private readonly pad = new GamepadReader(/\bXbox\b/.test(navigator.userAgent));
@@ -86,8 +88,13 @@ export class InputManager {
     this.listen(surface, 'pointerdown', (e) => this.onSurfaceDown(e as PointerEvent));
     this.listen(surface, 'pointermove', (e) => this.onSurfaceMove(e as PointerEvent));
     this.listen(surface, 'pointerup', (e) => this.onSurfaceUp(e as PointerEvent));
-    this.listen(surface, 'pointercancel', (e) => this.endAim((e as PointerEvent).pointerId, false));
-    this.listen(surface, 'lostpointercapture', (e) => this.endAim((e as PointerEvent).pointerId, false));
+    const cancelSurface = (e: Event) => {
+      const id = (e as PointerEvent).pointerId;
+      this.endAim(id, false);
+      this.endTouchFire(id);
+    };
+    this.listen(surface, 'pointercancel', cancelSurface);
+    this.listen(surface, 'lostpointercapture', cancelSurface);
     this.listen(surface, 'contextmenu', (e) => e.preventDefault());
     this.listen(window, 'pointerup', (e) => {
       if ((e as PointerEvent).pointerType === 'mouse') this.mouseFire = false;
@@ -100,17 +107,9 @@ export class InputManager {
       this.cb.onGesture();
       if (pe.pointerType !== 'mouse') this.setMode('touch');
       if (!this.enabled) return;
-      this.touchFireId = pe.pointerId;
-      this.pressLatch = true;
-      try {
-        fireButton.setPointerCapture(pe.pointerId);
-      } catch {
-        /* capture is best-effort */
-      }
+      this.startTouchFire(pe, fireButton);
     });
-    const releaseFire = (e: Event) => {
-      if ((e as PointerEvent).pointerId === this.touchFireId) this.touchFireId = null;
-    };
+    const releaseFire = (e: Event) => this.endTouchFire((e as PointerEvent).pointerId);
     this.listen(fireButton, 'pointerup', releaseFire);
     this.listen(fireButton, 'pointercancel', releaseFire);
     this.listen(fireButton, 'lostpointercapture', releaseFire);
@@ -231,7 +230,7 @@ export class InputManager {
   }
 
   get fireHeld(): boolean {
-    return this.enabled && (this.mouseFire || this.keyFire || this.padFire || this.touchFireId !== null);
+    return this.enabled && (this.mouseFire || this.keyFire || this.padFire || this.touchFire.size > 0);
   }
 
   /** Returns true once per fresh fire press. */
@@ -247,14 +246,15 @@ export class InputManager {
     this.keyFire = false;
     this.padFire = false;
     this.pressLatch = false;
-    if (this.touchFireId !== null) {
+    for (const [id, el] of this.touchFire) {
       try {
-        this.fireButton.releasePointerCapture(this.touchFireId);
+        el.releasePointerCapture(id);
       } catch {
         /* ignore */
       }
     }
-    this.touchFireId = null;
+    this.touchFire.clear();
+    this.fireButton.classList.remove('held');
     if (this.aim) {
       try {
         this.surface.releasePointerCapture(this.aim.id);
@@ -302,6 +302,9 @@ export class InputManager {
         return;
       }
       if (e.button !== 0) return;
+    } else if (this.inFireHalf(e)) {
+      this.startTouchFire(e, this.surface);
+      return;
     }
     if (this.aim) return; // a second finger on the aim area is ignored
     e.preventDefault();
@@ -331,6 +334,31 @@ export class InputManager {
   private onSurfaceUp(e: PointerEvent): void {
     if (e.pointerType === 'mouse' && e.button === 0) this.mouseFire = false;
     this.endAim(e.pointerId, true);
+    this.endTouchFire(e.pointerId);
+  }
+
+  /** Touch layout: the right half of the play area fires, the left half aims. */
+  private inFireHalf(e: PointerEvent): boolean {
+    const r = this.surface.getBoundingClientRect();
+    return e.clientX >= r.left + r.width / 2;
+  }
+
+  /** A finger starts holding fire; `el` keeps the pointer until it lifts, wherever it moves. */
+  private startTouchFire(e: PointerEvent, el: HTMLElement): void {
+    e.preventDefault();
+    this.touchFire.set(e.pointerId, el);
+    this.pressLatch = true;
+    this.fireButton.classList.add('held');
+    try {
+      el.setPointerCapture(e.pointerId);
+    } catch {
+      /* capture is best-effort */
+    }
+  }
+
+  private endTouchFire(id: number): void {
+    if (!this.touchFire.delete(id)) return;
+    if (this.touchFire.size === 0) this.fireButton.classList.remove('held');
   }
 
   private endAim(id: number, released: boolean): void {

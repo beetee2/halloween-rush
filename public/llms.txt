@@ -6,7 +6,7 @@ Key facts:
 
 - Genre: Halloween shooting gallery (arcade, casual, single player). Spooky but fun: bright colors, cartoon monsters, no blood or gore.
 - Platforms: desktop and mobile web browsers with JavaScript and WebGL (Chrome, Edge, Firefox, Safari). Can be added to a phone's Home Screen.
-- Controls: mouse to aim, click/hold or Space/F to fire, Esc or P to pause. On touch screens: drag to aim, hold the FIRE button.
+- Controls: mouse to aim, click/hold or Space/F to fire, Esc or P to pause. On touch screens: drag on the left half of the screen to aim, hold anywhere on the right half to fire.
 - Rules: each level lasts 60 seconds and starts with 3 hearts. A jack-o'-lantern thrown by a spider that reaches the player costs a heart; losing all three ends the run.
 - Points: candy corn 100, witch 75, spider 50 (big spider 25), incoming jack-o'-lantern 25, sucker 25, Frankenstein 10. Range bonus +5 from 12 m, +10 from 18 m. Headshots on witches and Frankensteins score double.
 - Levels: Haunted House, Graveyard, Spooky Forest, Pumpkin Patch, Haunted Carnival; then the cycle repeats as Night 2, Night 3 and so on, getting harder until level 13.

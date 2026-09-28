@@ -618,7 +618,7 @@ async function touchContext(browser: Browser, width = 844, height = 390): Promis
   return browser.newContext({ viewport: { width, height }, hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
 }
 
-test('touch phone: simultaneous drag-aim and fire button, taps do not fire, portrait prompt pauses', async ({ browser }) => {
+test('touch phone: left half aims, right half fires, simultaneous aim and fire, portrait prompt pauses', async ({ browser }) => {
   const ctx = await touchContext(browser);
   const page = await ctx.newPage();
   const errors = await open(page);
@@ -668,6 +668,34 @@ test('touch phone: simultaneous drag-aim and fire button, taps do not fire, port
   expect(fired).toBeLessThanOrEqual(Math.floor(heldSec / 0.4) + 1);
   test.info().annotations.push({ type: 'touch-hold', description: `${fired} shots in ${heldSec.toFixed(2)} s held` });
   await page.screenshot({ path: `${SHOTS}/phone-play.png` });
+
+  // Anywhere on the right half fires, not only the button; that finger never turns the view,
+  // even when it slides across the middle.
+  const s0 = await state(page);
+  await touch('touchStart', [{ x: 600, y: 150, id: 3 }]);
+  await expect(page.locator('#btn-fire')).toHaveClass(/held/);
+  for (let i = 1; i <= 5; i++) {
+    await touch('touchMove', [{ x: 600 - i * 50, y: 150 + i * 6, id: 3 }]);
+    await page.waitForTimeout(40);
+  }
+  await touch('touchEnd', []);
+  await page.waitForTimeout(300);
+  const s1 = await state(page);
+  expect(s1.shots).toBeGreaterThan(s0.shots);
+  expect(s1.yaw).toBeCloseTo(s0.yaw, 5);
+  await expect(page.locator('#btn-fire')).not.toHaveClass(/held/);
+
+  // An aim finger that slides into the right half keeps aiming and never fires.
+  await touch('touchStart', [{ x: 100, y: 200, id: 4 }]);
+  for (let i = 1; i <= 8; i++) {
+    await touch('touchMove', [{ x: 100 + i * 50, y: 200, id: 4 }]);
+    await page.waitForTimeout(40);
+  }
+  await touch('touchEnd', []);
+  await page.waitForTimeout(300);
+  const s2 = await state(page);
+  expect(s2.yaw).toBeLessThan(s1.yaw - 0.2);
+  expect(s2.shots).toBe(s1.shots);
 
   // Rotating to portrait shows the prompt and pauses without touching run state.
   const before = await state(page);
