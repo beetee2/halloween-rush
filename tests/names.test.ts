@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CONFIG } from '../src/config';
-import { APPROVED_NAMES, approvedName, nameProblem } from '../src/core/names.mjs';
+import { APPROVED_NAMES, approvedName, nameProblem, runName } from '../src/core/names.mjs';
 import { scoreboardName } from '../src/core/scoreboard';
 
 describe('scoreboard names', () => {
@@ -8,6 +8,19 @@ describe('scoreboard names', () => {
     for (const name of ['Hudson', 'hudson', 'EMMA', 'Brad', 'George', 'Susy', 'Mohammed', 'Xiomara', 'Jo', 'Mom', 'Grandpa', 'Abuela', 'Pumpkin', 'Frankenstein']) {
       expect(approvedName(name)).toBe(name);
     }
+  });
+
+  it('accepts vague names for anyone who would rather not give theirs', () => {
+    for (const name of ['Player', 'player', 'Player 123', 'Player123', 'Gamer', 'Hero7', 'Ninja', 'Mystery', 'Dragon 42', 'Cupcake', 'Candycorn']) {
+      expect(approvedName(name), name).toBe(name);
+    }
+    expect(nameProblem('Player 69')).toBe('number');
+  });
+
+  it('stores plain "Player" as no name, and anything else approved as typed', () => {
+    for (const name of ['Player', 'PLAYER', 'player', '']) expect(runName(name), name).toBe('');
+    for (const name of ['Player2', 'Player 2', 'Hudson']) expect(runName(name), name).toBe(name);
+    expect(runName('Poopy')).toBe('');
   });
 
   it('accepts accented spellings of listed names', () => {

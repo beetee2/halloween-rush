@@ -166,6 +166,24 @@ describe('projectiles and hits', () => {
     expect(run.levelInventory.spider).toBe(1);
   });
 
+  it('touch aim assist: a wider pumpkin hits a near miss that a normal one misses', () => {
+    const { projectileRadius, touchProjectileRadius } = CONFIG.weapon;
+    // Aimed beside the sucker, between the two radii's reach.
+    const offset = CONFIG.targets.sucker.hitRadius + (projectileRadius + touchProjectileRadius) / 2;
+    for (const [radius, hits] of [
+      [projectileRadius, 0],
+      [touchProjectileRadius, 1],
+    ] as const) {
+      const { world, run, log } = setup();
+      world.spawningEnabled = false;
+      const sucker = world.spawn('sucker')!;
+      stepFor(world, run, 1.2);
+      world.fire(muzzle(), aimAt(sucker).add(new THREE.Vector3(offset, 0, 0)), run, null, radius);
+      stepFor(world, run, 0.8);
+      expect(log.hits.length, `radius ${radius}`).toBe(hits);
+    }
+  });
+
   it('caps active projectiles', () => {
     const { world, run } = setup();
     world.spawningEnabled = false;

@@ -9,7 +9,7 @@
 //                     → { accepted, rejected, boards }
 //
 // Events are idempotent (client-generated ids), so a device can safely resend its outbox.
-import { approvedName } from '../src/core/names.mjs';
+import { approvedName, nameProblem, runName, UNNAMED } from '../src/core/names.mjs';
 
 const NAME_MAX_CHARS = 16;
 const BOARD_SIZE = 10;
@@ -20,7 +20,7 @@ const ID = /^[A-Za-z0-9-]{8,64}$/;
 const FINGERPRINT = /^[a-z0-9]{1,32}$/;
 /** Target kinds and range zones are short words (e.g. "witch", "far"). */
 const WORD = /^[A-Za-z]{1,24}$/;
-// Only text the game itself makes reaches the boards, whatever a client sends: approved names
+// Only text the game itself makes is stored, whatever a client sends: approved names
 // (src/core/names.mjs), device labels as deviceLabel() in src/net/device.ts builds them, and the
 // maps in src/render/environments.
 const LABEL = /^(iPhone|iPad|Android|Chromebook|Windows|Mac|Linux|Device) · (Edge|Samsung Internet|Opera|Firefox|Chrome|Safari|Browser|Home Screen)$/;
@@ -260,8 +260,8 @@ function parseEvent(ev) {
   const e = obj(ev);
   if (e.type === 'run') {
     const runId = id(e.id);
-    // A name that isn't approved leaves the run as a guest's rather than losing it.
-    return runId && { type: 'run', runId, player: typeof e.player === 'string' ? approvedName(cleanName(e.player)) : '' };
+    // A name that isn't approved leaves the run unnamed rather than losing it.
+    return runId && { type: 'run', runId, player: typeof e.player === 'string' ? runName(cleanName(e.player)) : '' };
   }
   const runId = id(e.runId);
   if (!runId) return null;
@@ -275,20 +275,18 @@ function parseEvent(ev) {
   }
   if (e.type === 'name' && typeof e.name === 'string') {
     const typed = cleanName(e.name);
-    const name = approvedName(typed);
-    return typed && !name ? null : { type: 'name', runId, name };
+    return typed && nameProblem(typed) ? null : { type: 'name', runId, name: runName(typed) };
   }
   return null;
 }
 
 /**
- * A stored name as the boards show it. Names saved before names were checked only appear if
- * they're approved now; the stored rows are left alone.
+ * A stored name as the boards show it. Runs nobody named (run_names calls them "Guest (device)")
+ * show as "Player", and so do names saved before names were checked that aren't approved now;
+ * the stored rows are left alone.
  */
 function shownName(name) {
-  const guest = /^Guest \((.*)\)$/.exec(name);
-  if (guest && (guest[1] === UNKNOWN_DEVICE || LABEL.test(guest[1]))) return name;
-  return approvedName(name) || 'Player';
+  return approvedName(name) || UNNAMED;
 }
 
 /** Create the tables; add columns, views, summaries and triggers only when SCHEMA changed. */

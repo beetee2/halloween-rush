@@ -7,7 +7,7 @@ import { emptyInventory, inventoryTotal } from './core/inventory';
 import type { SaveStore } from './core/persistence';
 import { Rng, randomSeed } from './core/rng';
 import { RunModel } from './core/run';
-import { approvedName, nameProblem } from './core/names.mjs';
+import { nameProblem, runName } from './core/names.mjs';
 import { addScore, careerRank, cleanName, DEFAULT_NAME, mapRank } from './core/scoreboard';
 import { InputManager } from './input/input';
 import { newId } from './net/device';
@@ -114,7 +114,7 @@ export class Game {
     this.scores.onBoards = (b) => this.onBoards(b);
     this.run = new RunModel(saved.bests);
 
-    this.stage = new Stage(opts.canvas, { touchDevice: opts.touchDevice });
+    this.stage = new Stage(opts.canvas);
     this.env = ENVIRONMENTS[0]!.build();
     this.stage.scene.add(this.env.group);
     this.applyFog();
@@ -509,23 +509,24 @@ export class Game {
 
   /**
    * The board a finished run made, for its badge and name prompt: its place on the scoreboard,
-   * else on the career board (host only), else null. `name` is the run's name ('' = guest).
+   * else on the career board (host only), else null. `name` is the run's name ('' = unnamed,
+   * listed as "Player"; with several of those the first is taken, which errs toward asking).
    */
   private runHonor(scoreboardRank: number | null, score: number, name: string): string | null {
     if (scoreboardRank !== null) return `#${scoreboardRank + 1} on the scoreboard`;
     const career = this.scores.boards?.career;
-    const place = career ? careerRank(career, name || `Guest (${this.scores.device.label})`, score) : null;
+    const place = career ? careerRank(career, name || DEFAULT_NAME, score) : null;
     return place === null ? null : `#${place + 1} in career points`;
   }
 
   /**
-   * The typed name if it may go on the scoreboard ('' if the box was left empty). Otherwise the
-   * name box stays up and says why, and this returns null.
+   * The typed name if it may go on the scoreboard ('' if the box was left empty or says just
+   * "Player"). Otherwise the name box stays up and says why, and this returns null.
    */
   private acceptName(raw: string, screen: 'results' | 'gameOver'): string | null {
     const typed = cleanName(raw);
     const problem = typed ? nameProblem(typed) : '';
-    if (!problem) return approvedName(typed);
+    if (!problem) return runName(typed);
     this.ui.rejectName(screen, problem);
     return null;
   }
@@ -643,6 +644,7 @@ export class Game {
 
     if (this.teleport) this.updateTeleport(dt);
     if (phase === 'countdown' || phase === 'playing') this.simulate(dt);
+    if (phase === 'playing') this.stage.trackFrame(dt);
 
     if (this.run.phase !== 'paused') {
       this.effects.update(dt);
@@ -705,7 +707,8 @@ export class Game {
     this.world.aimPoint(cam.position, tmpDir, tmpAim);
     this.launcher.muzzleWorld(tmpMuzzle);
     const shot = this.run.fireShot(this.input.yaw, this.input.pitch);
-    this.world.fire(tmpMuzzle, tmpAim, this.run, shot);
+    const radius = this.input.mode === 'touch' ? CONFIG.weapon.touchProjectileRadius : CONFIG.weapon.projectileRadius;
+    this.world.fire(tmpMuzzle, tmpAim, this.run, shot, radius);
     this.shotsFired++;
     this.launcher.fire();
     this.audio.play('fire');

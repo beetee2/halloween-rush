@@ -38,6 +38,8 @@ export interface Projectile {
   spin: THREE.Vector3;
   /** The run's record of this shot, marked as a hit when it lands on a target. */
   shot: ShotRecord | null;
+  /** How close to a target's hit shape counts as a hit (bigger with aim assist). */
+  radius: number;
 }
 
 export type SpawnKind = 'frankenstein' | 'witch' | 'spider' | 'candyCorn' | 'sucker';
@@ -201,9 +203,10 @@ export class World {
   // ------------------------------------------------------------------ shooting
   /**
    * Launch a pumpkin from the muzzle toward the crosshair aim point. A target sitting
-   * between the eye and the muzzle (point blank) is hit immediately.
+   * between the eye and the muzzle (point blank) is hit immediately. `radius`: how close to a
+   * target counts as a hit.
    */
-  fire(muzzle: THREE.Vector3, aimPoint: THREE.Vector3, run: RunModel, shot: ShotRecord | null = null): Projectile | null {
+  fire(muzzle: THREE.Vector3, aimPoint: THREE.Vector3, run: RunModel, shot: ShotRecord | null = null, radius: number = CONFIG.weapon.projectileRadius): Projectile | null {
     this.run = run;
     if (this.projectiles.length >= CONFIG.weapon.maxActiveProjectiles) {
       const oldest = this.projectiles.shift();
@@ -224,9 +227,10 @@ export class World {
       mesh,
       spin: new THREE.Vector3(this.rng.range(8, 14), this.rng.range(-4, 4), 0),
       shot,
+      radius,
     };
     // Point-blank: the launcher barrel occupies eye→muzzle, so test that segment first.
-    const hit = this.firstTargetHit(this.eye, muzzle, CONFIG.weapon.projectileRadius);
+    const hit = this.firstTargetHit(this.eye, muzzle, radius);
     if (hit) {
       this.registerHit(hit.target, muzzle.clone(), proj.vel, shot);
       this.releaseProjectile(proj);
@@ -301,11 +305,10 @@ export class World {
     }
 
     // 2. Projectiles sweep their whole path this step and stop at the first contact.
-    const r = CONFIG.weapon.projectileRadius;
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const p = this.projectiles[i]!;
       const p1 = tmpA.copy(p.pos).addScaledVector(p.vel, dt);
-      const targetHit = this.firstTargetHit(p.pos, p1, r);
+      const targetHit = this.firstTargetHit(p.pos, p1, p.radius);
       const sceneryT = this.firstSceneryHit(p.pos, p1);
       if (targetHit && (sceneryT === null || targetHit.t <= sceneryT)) {
         const point = p.pos.clone().lerp(p1, targetHit.t);

@@ -44,6 +44,7 @@ Run `npm run typecheck` and `npm test` before finishing any change.
 - Test hooks (`__HR__`, `installTestHooks`) must stay out of the production bundle.
 - Scoreboard names are an allowlist (`src/core/names.mjs`), enforced by the game and the scores
   API. Test data needs listed names such as `Hudson`, `Dad` or `Brad2`, not `P1` or two words.
+  Plain `Player` is stored as no name (`runName`): unnamed runs count per device and show as Player.
 - Search engines render without WebGL. The no-WebGL path (`UI.showError`) must keep the title
   card visible; don't turn it back into a separate error screen.
 - The production origin `https://halloweenrush.app` is hardcoded in `index.html`,

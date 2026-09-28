@@ -870,8 +870,16 @@ body.pad .screen :is(button, input, a):focus {
 
 .name-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 8px;
+}
+
+.name-note {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.3;
+  opacity: 0.8;
 }
 
 .name-row input {
@@ -982,6 +990,25 @@ body.pad .screen :is(button, input, a):focus {
 }
 
 @media (max-height: 460px) {
+  /* Phones in landscape: a slimmer HUD leaves more of the short screen for play. */
+  .hud-timer {
+    font-size: 28px;
+    padding: 0 12px;
+  }
+  .hud-scores {
+    top: calc(50px + var(--safe-t));
+  }
+  .hud-hearts svg {
+    width: 26px;
+    height: 26px;
+  }
+  .icon-btn {
+    width: 40px;
+    height: 40px;
+  }
+  body.touch .hud-candy {
+    top: calc(50px + var(--safe-t));
+  }
   .card {
     padding: 10px 16px;
     gap: 6px;
@@ -1030,6 +1057,9 @@ body.pad .screen :is(button, input, a):focus {
   .name-row input {
     min-height: 40px;
     padding: 4px 10px;
+  }
+  .name-note {
+    font-size: 12px;
   }
 }
 
