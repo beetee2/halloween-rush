@@ -1,6 +1,8 @@
 import { CONFIG } from '../config';
 import { accuracy, DEFAULT_NAME, scoreboardName } from '../core/scoreboard';
-import type { Bests, CandyKind, Inventory, SizeClass } from '../types';
+import type { PadMenuAction } from '../input/gamepad';
+import type { InputMode } from '../input/input';
+import type { Bests, CandyKind, Inventory, Settings, SizeClass } from '../types';
 import { CANDY_KINDS } from '../types';
 import { BoardPanel, type BoardsView } from './boards';
 
@@ -59,6 +61,7 @@ export class UI {
   private readonly levelNameInput: HTMLInputElement;
   private readonly gameOverBoards: BoardPanel;
   private readonly titleBoards: BoardPanel;
+  private readonly fullscreenButtons = [$('btn-fullscreen-title'), $('btn-fullscreen-pause')];
   current: Screen = 'title';
 
   constructor() {
@@ -89,6 +92,12 @@ export class UI {
       this.warns.push(el);
     }
     $('btn-reload').addEventListener('click', () => location.reload());
+    // Not every browser can (iPhone Safari can't): offer full screen only where it works.
+    const canFullscreen = document.fullscreenEnabled === true && typeof document.documentElement.requestFullscreen === 'function';
+    for (const b of this.fullscreenButtons) b.hidden = !canFullscreen;
+    document.addEventListener('fullscreenchange', () => {
+      for (const b of this.fullscreenButtons) b.textContent = document.fullscreenElement ? 'Exit full screen' : 'Full screen';
+    });
     window.addEventListener('resize', () => (this.warnTop = null));
     this.gameOverBoards = new BoardPanel($('gameover-boards'));
     this.titleBoards = new BoardPanel($('title-boards'));
@@ -207,8 +216,50 @@ export class UI {
     $('hud').hidden = !v;
   }
 
-  setTouchMode(touch: boolean): void {
-    document.body.classList.toggle('touch', touch);
+  setInputMode(mode: InputMode): void {
+    document.body.classList.toggle('touch', mode === 'touch');
+    document.body.classList.toggle('pad', mode === 'gamepad');
+  }
+
+  /**
+   * Controller menu navigation: the D-pad or left stick moves focus through the current
+   * screen's controls (left/right adjust a slider) and A presses the focused one.
+   */
+  padMenu(action: PadMenuAction): void {
+    const screen = this.current && this.screens[this.current];
+    if (!screen) return;
+    const items = Array.from(screen.querySelectorAll<HTMLElement>('button, input, a[href]'))
+      // Laid out (not hidden) and enabled.
+      .filter((el) => el.getClientRects().length > 0 && !(el as HTMLButtonElement).disabled);
+    const at = items.indexOf(document.activeElement as HTMLElement);
+    const focused = items[at];
+    if (action === 'select') {
+      // Same guard as for clicks: a press as the level ends can't skip the screen unseen.
+      if (focused && !this.clickLocked) focused.click();
+      return;
+    }
+    if (focused instanceof HTMLInputElement && focused.type === 'range' && (action === 'left' || action === 'right')) {
+      if (action === 'right') focused.stepUp();
+      else focused.stepDown();
+      focused.dispatchEvent(new Event('input', { bubbles: true }));
+      return;
+    }
+    if (!items.length) return;
+    const step = action === 'up' || action === 'left' ? -1 : 1;
+    const next = at < 0 ? (step > 0 ? 0 : items.length - 1) : (at + step + items.length) % items.length;
+    items[next]!.focus();
+  }
+
+  /** Whole page full screen (HUD and menus too), e.g. to hide a TV browser's bars. Needs a click or tap. */
+  toggleFullscreen(): void {
+    try {
+      const done = document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+      done.catch(() => {
+        /* refused without a click or tap, or not allowed here */
+      });
+    } catch {
+      /* ignore */
+    }
   }
 
   updateHud(s: HudState): void {
@@ -459,24 +510,30 @@ export class UI {
     $('pause-sub').textContent = text;
   }
 
-  bindSettings(initial: { volume: number; muted: boolean; aimSensitivity: number }, storageOk: boolean, onChange: (s: { volume: number; muted: boolean; aimSensitivity: number }) => void): void {
+  bindSettings(initial: Settings, storageOk: boolean, onChange: (s: Settings) => void): void {
     const vol = $('set-volume') as HTMLInputElement;
     const mute = $('set-mute') as HTMLInputElement;
     const sens = $('set-sens') as HTMLInputElement;
+    const invertY = $('set-invert-y') as HTMLInputElement;
+    const invertX = $('set-invert-x') as HTMLInputElement;
     const out = $('set-sens-out');
     vol.value = String(initial.volume);
     mute.checked = initial.muted;
     sens.value = String(initial.aimSensitivity);
+    invertY.checked = initial.invertPadY;
+    invertX.checked = initial.invertPadX;
     out.textContent = `${initial.aimSensitivity.toFixed(2)}×`;
     $('set-storage').textContent = storageOk
       ? 'Settings, best scores and the scoreboard are saved in this browser for this address.'
       : 'This browser is not allowing saves, so settings and scores last until you close the page.';
     const emit = () => {
       out.textContent = `${Number(sens.value).toFixed(2)}×`;
-      onChange({ volume: Number(vol.value), muted: mute.checked, aimSensitivity: Number(sens.value) });
+      onChange({ volume: Number(vol.value), muted: mute.checked, aimSensitivity: Number(sens.value), invertPadY: invertY.checked, invertPadX: invertX.checked });
     };
     vol.addEventListener('input', emit);
     mute.addEventListener('change', emit);
     sens.addEventListener('input', emit);
+    invertY.addEventListener('change', emit);
+    invertX.addEventListener('change', emit);
   }
 }

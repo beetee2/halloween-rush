@@ -31,6 +31,10 @@ Last full run: 2026-09-26, on the final code in this folder.
   score/bag, restores hearts, advances the environment; game over includes the partial level;
   new run clears score/candy but keeps bests; replay never inflates the best; illegal phase
   transitions rejected.
+- **gamepad.test.ts**: stick dead zone and squared response; right stick aims in screen
+  directions (push up = look up); A, bumpers and triggers fire with one fresh press per push;
+  Menu pauses once per press; D-pad and left-stick menu moves with hysteresis and auto-repeat;
+  only standard-layout controllers are read.
 - **rules.test.ts**: 0.4 s fire cadence when held at 30/60/144/240 fps; rapid taps from several
   inputs never exceed the rate; buffered press; cancel on pause; segment–sphere entry,
   anti-tunnelling, boxes and ground; five-environment cycle, level-1 limits, monotonic capped
@@ -77,6 +81,14 @@ that hit and `CONFIG`, because the seeded candy spot decides the range bonus.
 12–13. Visual tour of all five environments with Frankensteins, a witch, a spider, candy corn and a
     sucker spawned (incoming pumpkins appear when spiders throw), at desktop 1280×720 and
     phone-landscape 780×360, with screenshots.
+14. **Controller** (a standard gamepad simulated through a stubbed `navigator.getGamepads`): the
+    title's Full screen button enters and exits full screen; A presses the focused Start button;
+    the mouse is never captured; right stick right turns right and up looks up; a held RT
+    repeats fire; Menu pauses; the D-pad moves focus between the pause buttons; A held through
+    Resume does not fire, a fresh A press does; Settings → "Controller: invert up/down" reached
+    and ticked with the D-pad and A flips the stick; a mouse click after a second hands control back.
+15. **Edge on Xbox** (Xbox user agent): the stick's up/down sign is corrected, so pushing up still
+    looks up.
 
 ## Screenshot review
 
@@ -112,6 +124,11 @@ launcher (lower right), the candy bag (lower left) and the touch FIRE button all
   events, which is not proof of iOS Safari or Android Chrome behaviour (safe areas, audio unlock,
   touch latency, performance).
 - **No Firefox, Safari/WebKit or hardware-GPU Chromium** runs. All automated rendering was software (SwiftShader).
+- **No real controller or Xbox** in automated runs. Gamepad input was simulated in headless
+  Chromium. Edge on Xbox (browsing vs game controls, whether a gamepad press counts as a click for
+  full screen and sound) is taken from Microsoft's documentation. On a real Xbox, players found
+  full screen and firing working and the look inverted; the up/down correction for Xbox follows
+  from that report (the axis was not confirmed), with invert settings as the fallback.
 - **No second household device connected** over the LAN. The LAN address was only exercised from
   the host itself (`verify:serve`), so firewall and Wi-Fi isolation on a real network are untested.
 - **Performance was not measured** on any real device. Headless SwiftShader ran at roughly 20 fps

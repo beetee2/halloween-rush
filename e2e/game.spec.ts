@@ -457,6 +457,162 @@ test('desktop drag fallback when pointer lock is unavailable', async ({ page }) 
   expect(errors).toEqual([]);
 });
 
+/** Standard-mapping button indices used by the controller tests. */
+const PAD = { A: 0, RT: 7, MENU: 9, UP: 12, DOWN: 13 };
+
+/** A fake standard-mapping controller behind navigator.getGamepads, driven by the test. */
+async function fakePad(page: Page) {
+  await page.addInitScript(() => {
+    const pad = {
+      id: 'Xbox Wireless Controller (STANDARD GAMEPAD)',
+      index: 0,
+      connected: true,
+      mapping: 'standard',
+      timestamp: 0,
+      axes: [0, 0, 0, 0],
+      buttons: Array.from({ length: 17 }, () => ({ pressed: false, touched: false, value: 0 })),
+    };
+    (window as any).__pad = pad;
+    Object.defineProperty(navigator, 'getGamepads', { configurable: true, value: () => [pad, null, null, null] });
+  });
+  const setButton = (b: number, down: boolean) =>
+    page.evaluate(([i, d]) => {
+      const btn = (window as any).__pad.buttons[i as number];
+      btn.pressed = d;
+      btn.value = d ? 1 : 0;
+    }, [b, down] as const);
+  const setAxes = (axes: number[]) => page.evaluate((a) => ((window as any).__pad.axes = a), axes);
+  /** Wait for `n` animation frames: the game reads the controller once per frame (slow in SwiftShader). */
+  const frames = (n: number) =>
+    page.evaluate(
+      (k) =>
+        new Promise<void>((done) => {
+          let i = 0;
+          const f = () => (++i >= k ? done() : requestAnimationFrame(f));
+          requestAnimationFrame(f);
+        }),
+      n,
+    );
+  const press = async (b: number) => {
+    await setButton(b, true);
+    await frames(3);
+    await setButton(b, false);
+    await frames(3);
+  };
+  /** Hold the right stick for a few frames, then let go. */
+  const stick = async (x: number, y: number) => {
+    await setAxes([0, 0, x, y]);
+    await frames(10);
+    await setAxes([0, 0, 0, 0]);
+    await frames(2);
+  };
+  return { setButton, setAxes, frames, press, stick };
+}
+
+test('Xbox controller: menus, right-stick aim (not inverted), trigger fire, Menu pauses, invert setting; full screen', async ({ page }) => {
+  const { setButton, frames, press, stick } = await fakePad(page);
+  const { A, RT, MENU, UP, DOWN } = PAD;
+
+  const errors = await open(page);
+  // Full screen from the title (a real click, as with the cursor in Edge on Xbox).
+  await expect(page.locator('#btn-fullscreen-title')).toBeVisible();
+  await page.click('#btn-fullscreen-title');
+  await expect.poll(() => page.evaluate(() => document.fullscreenElement !== null)).toBe(true);
+  await expect(page.locator('#btn-fullscreen-title')).toHaveText('Exit full screen');
+  await page.click('#btn-fullscreen-title');
+  await expect.poll(() => page.evaluate(() => document.fullscreenElement === null)).toBe(true);
+
+  // A presses the focused Start button; the controller never asks for the mouse.
+  await page.locator('#btn-start').focus();
+  await press(A);
+  await skipCountdown(page);
+  let s = await state(page);
+  expect(s.mode).toBe('gamepad');
+  expect(s.locked).toBe(false);
+  await expect(page.locator('body')).toHaveClass(/\bpad\b/);
+  await expect(page.locator('#hud-hint')).toBeHidden();
+  await page.evaluate(() => {
+    window.__HR__.setSpawning(false);
+    window.__HR__.clearTargets();
+  });
+
+  // Right stick right turns right (yaw falls, as with the mouse); up looks up.
+  const y0 = s.yaw;
+  await stick(1, 0);
+  await stick(0, -1);
+  s = await state(page);
+  expect(s.yaw).toBeLessThan(y0 - 0.1);
+  expect(s.pitch).toBeGreaterThan(0.1);
+
+  // RT fires; holding it repeats.
+  await setButton(RT, true);
+  await expect.poll(async () => (await state(page)).shots).toBeGreaterThanOrEqual(2);
+  await setButton(RT, false);
+
+  // Menu pauses; the D-pad moves between the pause buttons and A presses one.
+  await press(MENU);
+  await waitPhase(page, 'paused');
+  await expect(page.locator('#btn-resume')).toBeFocused();
+  await press(DOWN);
+  await expect(page.locator('#btn-settings-pause')).toBeFocused();
+  await press(UP);
+  await expect(page.locator('#btn-resume')).toBeFocused();
+  // Holding A through Resume must not fire as play restarts.
+  const shots = (await state(page)).shots;
+  await setButton(A, true);
+  await waitPhase(page, 'playing');
+  await page.waitForTimeout(600);
+  expect((await state(page)).shots).toBe(shots);
+  await setButton(A, false);
+  await frames(3);
+  await press(A);
+  await expect.poll(async () => (await state(page)).shots).toBe(shots + 1);
+
+  // Settings → "Controller: invert up/down" with the D-pad and A: stick up now looks down.
+  await press(MENU);
+  await waitPhase(page, 'paused');
+  await press(DOWN);
+  await press(A);
+  await expect(page.locator('#btn-settings-done')).toBeFocused();
+  await press(UP);
+  await press(UP);
+  await expect(page.locator('#set-invert-y')).toBeFocused();
+  await press(A);
+  await expect(page.locator('#set-invert-y')).toBeChecked();
+  await press(DOWN);
+  await press(DOWN);
+  await press(A);
+  await expect(page.locator('#btn-resume')).toBeFocused();
+  await press(MENU);
+  await waitPhase(page, 'playing');
+  const p0 = (await state(page)).pitch;
+  await stick(0, -1);
+  expect((await state(page)).pitch).toBeLessThan(p0 - 0.1);
+
+  // Back on the mouse after a moment: it aims again.
+  await page.waitForTimeout(1100);
+  await page.mouse.click(640, 360);
+  await expect.poll(async () => (await state(page)).mode).toBe('mouse');
+  expect(errors).toEqual([]);
+});
+
+test('Edge on Xbox reports stick up as positive: the game flips it so up still looks up', async ({ browser }) => {
+  const ctx = await browser.newContext({
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; Xbox; Xbox Series X) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36 Edg/140.0.0.0',
+  });
+  const page = await ctx.newPage();
+  const { press, stick } = await fakePad(page);
+  const errors = await open(page);
+  await page.locator('#btn-start').focus();
+  await press(PAD.A);
+  await skipCountdown(page);
+  const p0 = (await state(page)).pitch;
+  await stick(0, 1);
+  expect((await state(page)).pitch).toBeGreaterThan(p0 + 0.1);
+  expect(errors).toEqual([]);
+  await ctx.close();
+});
+
 async function touchContext(browser: Browser, width = 844, height = 390): Promise<BrowserContext> {
   return browser.newContext({ viewport: { width, height }, hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
 }

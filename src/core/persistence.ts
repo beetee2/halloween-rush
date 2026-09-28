@@ -19,7 +19,7 @@ export const LEGACY_NAME = '???';
 const RUN_ID = /^[A-Za-z0-9-]{8,64}$/;
 const MAX_LEVELS = 500;
 
-export const DEFAULT_SETTINGS: Settings = { volume: 0.8, muted: false, aimSensitivity: 1 };
+export const DEFAULT_SETTINGS: Settings = { volume: 0.8, muted: false, aimSensitivity: 1, invertPadY: false, invertPadX: false };
 export const DEFAULT_BESTS: Bests = { bestRunScore: 0, furthestLevel: 0 };
 
 type StorageLike = Pick<Storage, 'getItem' | 'setItem'>;
@@ -82,6 +82,8 @@ export function sanitize(raw: unknown): SaveData {
       volume: num(s.volume, DEFAULT_SETTINGS.volume, 0, 1),
       muted: typeof s.muted === 'boolean' ? s.muted : DEFAULT_SETTINGS.muted,
       aimSensitivity: num(s.aimSensitivity, DEFAULT_SETTINGS.aimSensitivity, 0.25, 3),
+      invertPadY: s.invertPadY === true,
+      invertPadX: s.invertPadX === true,
     },
     bests,
     scoreboard: board,

@@ -62,6 +62,10 @@ export interface Settings {
   muted: boolean;
   /** Aim sensitivity multiplier. */
   aimSensitivity: number;
+  /** Controller sticks: push up to look down. */
+  invertPadY: boolean;
+  /** Controller sticks: push right to turn left. */
+  invertPadX: boolean;
 }
 
 export interface Bests {
