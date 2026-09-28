@@ -350,6 +350,7 @@ test('game over: name onto the scoreboard, career and level boards, new run rese
   await expect(page.locator('#gameover-accuracy')).toContainText('(1/'); // held fire may add misses
   await expect(page.locator('#btn-newrun')).toBeHidden();
   await expect(page.locator('#gameover-name')).toBeFocused();
+  await expect(page.locator('#gameover-name-note')).toContainText('Optional');
   await page.keyboard.down('Space'); // the held key auto-repeats...
   await page.keyboard.up('Space');
   await expect(page.locator('#gameover-name')).toHaveValue(''); // ...but types nothing
@@ -767,7 +768,7 @@ test('can be added to a phone Home Screen: tags, manifest and icons are served',
   expect(errors).toEqual([]);
 });
 
-test('phone landscape: a full scoreboard and career fit the game-over screen; Save works by tap', async ({ browser, request }) => {
+test('phone landscape: a full scoreboard and career fit the game-over screen; Skip works by tap', async ({ browser, request }) => {
   // Ten earlier runs by the family on another device, over two maps: 15, 25, … 105.
   const events: object[] = [];
   const earlierRuns: number[] = [];
@@ -797,18 +798,22 @@ test('phone landscape: a full scoreboard and career fit the game-over screen; Sa
   expect(rank).toBeLessThanOrEqual(10);
   await expect(page.locator('#gameover-why')).toHaveText(`#${rank} on the scoreboard`);
   await expect(page.locator('#gameover-name')).not.toBeFocused(); // no surprise keyboard on touch
-  const save = (await page.locator('#btn-save-score').boundingBox())!;
-  expect(save.y + save.height).toBeLessThanOrEqual(360);
+  for (const button of ['#btn-save-score', '#btn-skip-score']) {
+    const box = (await page.locator(button).boundingBox())!;
+    expect(box.y + box.height, button).toBeLessThanOrEqual(360);
+  }
   const overflow = await page.evaluate(() => {
     const card = document.querySelector('#screen-gameover .card') as HTMLElement;
     return card.scrollWidth - card.clientWidth;
   });
   expect(overflow).toBeLessThanOrEqual(0);
   await page.screenshot({ path: `${SHOTS}/phone-gameover.png` });
-  await page.tap('#btn-save-score');
+  // A name is optional: Skip lists the run as Player.
+  await page.tap('#btn-skip-score');
   await expect(page.locator('#gameover-rankbadge')).toHaveText(`#${rank} on the scoreboard!`);
   await expect(page.locator('#gameover-boards ol[aria-label="Scoreboard"] li')).toHaveCount(10);
   await expect(page.locator('#gameover-boards li.you')).toContainText(String(scored));
+  await expect(page.locator('#gameover-boards li.you')).toContainText('Player');
   await page.tap('#gameover-boards [role="tab"]:has-text("Career")');
   await expect(page.locator('#gameover-boards ol[aria-label="Career"]')).toContainText('Grandmother');
   await expect(page.locator('#gameover-boards ol[aria-label="Career"]')).toContainText('Avg/map: House');

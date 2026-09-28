@@ -123,7 +123,9 @@ export class UI {
   rejectName(screen: 'results' | 'gameOver', problem: 'name' | 'number'): void {
     const { input, error } = this.nameEntry(screen);
     error.textContent =
-      problem === 'number' ? "That number isn't allowed with that name. Try another one." : "That name isn't allowed. Try your first name, Mom or Pumpkin, plus a number if you like: Brad2.";
+      problem === 'number'
+        ? "That number isn't allowed with that name. Try another one, or Skip."
+        : "That name isn't allowed. Try a first name, Mom, Pumpkin or Player, plus a number if you like (Brad2), or Skip.";
     error.hidden = false;
     // The card scrolls on short phone screens.
     error.scrollIntoView({ block: 'nearest' });
@@ -131,14 +133,16 @@ export class UI {
     input.select();
   }
 
-  /** The player submitted a name for the run waiting on the scoreboard. */
+  /** The player submitted a name for the run waiting on the scoreboard ('' = skipped). */
   onSaveScore(handler: (name: string) => void): void {
     this.onSubmit('gameover-entry', () => handler(this.nameInput.value));
+    this.on('btn-skip-score', () => handler(''));
   }
 
-  /** The player submitted a name on the level results (a level best or a map top 10). */
+  /** The player submitted a name on the level results, a level best or a map top 10 ('' = skipped). */
   onSaveLevelName(handler: (name: string) => void): void {
     this.onSubmit('results-entry', () => handler(this.levelNameInput.value));
+    this.on('btn-skip-level', () => handler(''));
   }
 
   private onSubmit(formId: string, fn: () => void): void {

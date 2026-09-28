@@ -1,9 +1,9 @@
 import { CONFIG } from '../config';
 import type { ScoreEntry } from '../types';
-import { approvedName } from './names.mjs';
+import { approvedName, UNNAMED } from './names.mjs';
 
-/** Saved when the name box is left empty. */
-export const DEFAULT_NAME = 'Player';
+/** Shown when the name box is left empty or skipped. */
+export const DEFAULT_NAME = UNNAMED;
 
 /** Collapse whitespace, drop control characters and cap the length in characters (emoji stay whole). */
 export function cleanName(raw: string): string {

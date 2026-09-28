@@ -25,6 +25,11 @@ export const CONFIG = {
     fireIntervalSec: 0.4,
     projectileSpeed: 48,
     projectileRadius: 0.22,
+    /**
+     * Aim assist for touch screens, where a thumb aims at small targets on a small screen: their
+     * pumpkins hit anything this close to their path.
+     */
+    touchProjectileRadius: 0.4,
     projectileMaxRange: 95,
     /** Launcher muzzle in camera space (x right, y up, -z forward). */
     muzzleOffset: [0.3, -0.27, -1.0] as const,
@@ -152,8 +157,16 @@ export const CONFIG = {
   },
 
   render: {
-    maxPixelRatioDesktop: 2,
-    maxPixelRatioTouch: 1.5,
+    /** Phones are often 3×: 2× with antialiasing looks as sharp for about half the pixels. */
+    maxPixelRatio: 2,
+    /**
+     * Adaptive resolution: when a sample of play averages under `minFps`, the pixel ratio drops
+     * by `pixelRatioStep` (not below `minPixelRatio`).
+     */
+    minFps: 45,
+    sampleSec: 2,
+    pixelRatioStep: 0.5,
+    minPixelRatio: 1,
   },
 
   teleport: {

@@ -164,11 +164,13 @@
             <div class="badge" id="results-levelbest" hidden></div>
           </div>
           <form id="results-entry" class="name-entry" hidden>
-            <label for="results-name"><b id="results-why">Best score ever on Level 1</b>! Type your name:</label>
+            <label for="results-name"><b id="results-why">Best score ever on Level 1</b>! Add your name?</label>
             <div class="name-row">
-              <input id="results-name" type="text" placeholder="Your name" autocomplete="off" autocapitalize="words" autocorrect="off" spellcheck="false" enterkeyhint="done" />
+              <input id="results-name" type="text" placeholder="Your name" autocomplete="off" autocapitalize="words" autocorrect="off" spellcheck="false" enterkeyhint="done" aria-describedby="results-name-note" />
               <button id="btn-save-level" class="btn primary" type="submit">Save</button>
+              <button id="btn-skip-level" class="btn ghost" type="button">Skip</button>
             </div>
+            <p id="results-name-note" class="name-note">Optional, only for the leaderboards. Skip it to be listed as Player.</p>
             <p id="results-name-error" class="name-error" role="alert" hidden></p>
           </form>
           <div class="btn-row" id="results-actions">
@@ -192,11 +194,13 @@
               <div class="badge" id="gameover-rankbadge" hidden></div>
             </div>
             <form id="gameover-entry" class="name-entry" hidden>
-              <label for="gameover-name"><b id="gameover-why">#1 on the scoreboard</b>! Type your name:</label>
+              <label for="gameover-name"><b id="gameover-why">#1 on the scoreboard</b>! Add your name?</label>
               <div class="name-row">
-                <input id="gameover-name" type="text" placeholder="Your name" autocomplete="off" autocapitalize="words" autocorrect="off" spellcheck="false" enterkeyhint="done" />
+                <input id="gameover-name" type="text" placeholder="Your name" autocomplete="off" autocapitalize="words" autocorrect="off" spellcheck="false" enterkeyhint="done" aria-describedby="gameover-name-note" />
                 <button id="btn-save-score" class="btn primary" type="submit">Save</button>
+                <button id="btn-skip-score" class="btn ghost" type="button">Skip</button>
               </div>
+              <p id="gameover-name-note" class="name-note">Optional, only for the leaderboards. Skip it to be listed as Player.</p>
               <p id="gameover-name-error" class="name-error" role="alert" hidden></p>
             </form>
             <div class="btn-row" id="gameover-actions">

@@ -50,6 +50,8 @@ capture, drag to aim instead and click (or press Space) to fire.
 **Touch (phone/tablet):** play in landscape. Drag anywhere on the scene to aim and hold the
 round **FIRE** button to shoot. You can aim and fire with two fingers at once. The ⏸ button
 pauses. In portrait the game pauses and asks you to rotate. Fullscreen is never required.
+Touch shots get a little aim assist: a pumpkin fired from a touch screen hits anything within
+0.4 m of its path instead of 0.22 m (`CONFIG.weapon.touchProjectileRadius`).
 
 **Controller (Xbox, PlayStation and other standard gamepads):** the right stick aims (the left
 stick works too; push up to look up, never inverted). **RT** or **A** fires (bumpers and LT too);
@@ -77,16 +79,20 @@ Four leaderboards, each a top 10 (Level bests: the record per level):
 - **Maps:** the 10 best finished levels on each of the five maps.
 - **Level bests:** the record for finishing each level number, and who holds it.
 
-**Names:** make any of the boards and you're asked for your name (the last name used on that
-device is filled in; Enter or **Save**). A level best or a Maps top 10 asks on the results screen;
-a Scoreboard or Career top 10 asks at game over. You're only asked once per run: the name counts
-for the whole run. Leave it blank and the run is listed as a guest of that device, e.g.
-"Guest (iPhone · Safari)".
+**Names are optional** and only used on the leaderboards. Make any of the boards and you're
+offered a name box (the last name used on that device is filled in; Enter or **Save**), or
+**Skip** it. A level best or a Maps top 10 asks on the results screen; a Scoreboard or Career top
+10 asks at game over. You're only asked once per run: the name counts for the whole run. Skip it
+or leave it blank and the run is listed as **Player**. Unnamed runs still count per device, so
+the Career board can show more than one "Player"; typing plain "Player" works the same way.
+"Player2" or "Player 123" is a name like any other, shared by whoever types it.
 
 **Allowed names** (this is a game for kids): one name from the built-in list, optionally followed
 by a number so two Brads can be "Brad" and "Brad2". The list holds about 10,000 first names (US
 Social Security baby-name data, minus any that read as rude words, slang or slurs), family names
-like Mom, Grandpa or Abuela, and spooky ones like Pumpkin. Numbers that are rude themselves (69,
+like Mom, Grandpa or Abuela, spooky ones like Pumpkin or Candycorn, and vague ones for anyone who
+would rather not give theirs: Player, Gamer, Hero, Ninja, Mystery, Dragon, Cupcake and more
+(`GENERIC` in `src/core/names.mjs`). Numbers that are rude themselves (69,
 420, 666, 88…) or that finish spelling a rude word as look-alike letters ("Ana1", "Bo08",
 "Josh17") are refused too, and the player is asked to try another. Nothing else gets through,
 however it's spelled, and the scores server checks again. To allow a name that isn't listed, add
@@ -274,7 +280,9 @@ docs/                  GAME_DESIGN.md, IMPLEMENTATION_PLAN.md, VERIFICATION.md
   Safari or Firefox has been tested, and no second household device has connected over the LAN.
   See [docs/VERIFICATION.md](docs/VERIFICATION.md).
 - Performance on real devices has not been measured; the target is smooth desktop play and
-  practical mobile play with capped pixel ratio, no real-time shadows and bounded effects.
+  practical mobile play with bounded effects and no real-time shadows. Every device draws at up
+  to 2× with antialiasing; if play runs under 45 fps the resolution steps down (to 1.5×, then 1×),
+  and a step that doesn't help (e.g. iOS Low Power Mode's 30 fps cap) is undone.
 - The Full screen button needs the browser's fullscreen support: iPhones can't fullscreen web
   pages at all; use the Home Screen (above). Android's Home Screen version opens fullscreen.
   Neither was tried on a real phone.

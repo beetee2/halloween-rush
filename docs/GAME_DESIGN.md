@@ -19,6 +19,9 @@ _This document describes the delivered build. Every number below comes from `src
   (48 m/s). Each one hits the **first** thing along its swept path (target, solid scenery, or
   ground) and disappears. Sub-stepped swept-sphere collision prevents tunnelling at low frame
   rates. There is no splash damage; explosions are cosmetic.
+- **Touch aim assist:** a pumpkin's hit radius is 0.22 m, or 0.4 m when fired from a touch
+  screen, where a thumb aims at small targets on a small screen. Headshots still need the line
+  of flight through the head zone.
 - **Base points are by explicit size class**: small **50**, medium **25**, large **10**, except
   **witches (75)** and **candy corn (100)**, which have their own values.
 - **Range bonus** per hit, by distance from the player to the hit point: near (under 12 m) **+0**,
@@ -121,9 +124,11 @@ costs the same few hundred rows whether the history holds a hundred runs or a mi
 - **Career** = top 10 players by total of run totals, with games, best run, furthest level,
   accuracy and average points per level attempt on each map (every attempt counts toward
   averages). Players are grouped by name (case-insensitive); unnamed runs are grouped per device
-  as "Guest (label)".
-- **Asking for a name:** anyone who makes a board is asked once per run, with the last name used
-  on the device filled in. The results screen asks after a level best or a Maps top 10; the
+  and shown as "Player". Typing plain "Player" counts as no name, so everyone who does keeps a
+  career of their own; "Player2" is an ordinary name.
+- **Asking for a name:** anyone who makes a board is offered a name box once per run, with the
+  last name used on the device filled in. The name is optional and only used on the boards:
+  **Skip** (or a blank Save) lists the run as "Player". The results screen asks after a level best or a Maps top 10; the
   game-over screen asks after a Scoreboard or Career top 10 (strictly beating 10th place, or any
   room left on a short board). A name typed earlier in the run counts, so it's never asked twice;
   the badge still says which board was made. Maps and Career need the host's boards; with the host
@@ -140,7 +145,8 @@ costs the same few hundred rows whether the history holds a hundred runs or a mi
 - Names are an allowlist, checked by `src/core/names.mjs` in the game and again by the host:
   exactly one approved word (`nameList.mjs`: US Social Security baby names given to 1,000+
   babies since 1935 or 100 in one year, minus rude/slang/slur look-alikes; plus family and
-  spooky words), case and accents ignored, optionally followed by a number of up to 4 digits.
+  spooky words, plus vague ones such as Player, Gamer or Ninja for anyone who'd rather not give
+  a name), case and accents ignored, optionally followed by a number of up to 4 digits.
   A number is refused if it is rude itself (69, 420, 666, 88…) or if its digits, read as
   look-alike letters (0=o, 1=i/l, 3=e, 4=a, 5=s, 7=t…), finish a rude word with the end of the
   name. The results and game-over screens say which part to change. The scores API
@@ -164,8 +170,10 @@ proportion to the real counts. At most 12 candies fly at once. The bag carries o
 Beyond the brief: witch/Frankenstein/candy spawn intervals and caps in `config.difficulty`;
 a 3 s countdown and 0.7 s + 0.7 s teleport swirl; a 1.2 s immunity window; 15% "big spider"
 chance (medium, 25 pts); spawn delays of 0.6 s (Frankenstein) to 8 s (sucker) at level
-start; caps of 16 targets, 12 projectiles, 260 particles and 8 score popups; pixel ratio capped
-at 2 (desktop) / 1.5 (touch); no real-time shadow maps (baked blob shadows instead).
+start; caps of 16 targets, 12 projectiles, 260 particles and 8 score popups; antialiasing on and
+pixel ratio capped at 2 on every device, stepping down to 1.5 and then 1 while play runs under
+45 fps (a step that doesn't raise the frame rate is undone: the limit is a frame-rate cap or the
+CPU, not the pixels); no real-time shadow maps (baked blob shadows instead).
 
 ## Architecture
 

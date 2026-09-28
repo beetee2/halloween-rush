@@ -57,7 +57,7 @@ describe('scores database', () => {
     const events = [run('run-bbbb-0001'), attempt('run-bbbb-0001', 1, 1, 100)];
     await db.sync({ device: phone, events });
     await db.sync({ device: phone, events });
-    expect((await db.boards()).runs).toEqual([{ runId: 'run-bbbb-0001', name: 'Guest (iPhone · Safari)', score: 100, level: 1, shots: 0, hits: 0 }]);
+    expect((await db.boards()).runs).toEqual([{ runId: 'run-bbbb-0001', name: 'Player', score: 100, level: 1, shots: 0, hits: 0 }]);
   });
 
   it('names a run afterwards and groups careers by name across devices', async () => {
@@ -96,7 +96,7 @@ describe('scores database', () => {
       ],
     });
     expect(r).toEqual({ accepted: 2, rejected: 7 });
-    expect((await db.boards()).runs.map((x) => [x.name, x.score])).toEqual([['Guest (Linux · Chrome)', 20]]);
+    expect((await db.boards()).runs.map((x) => [x.name, x.score])).toEqual([['Player', 20]]);
     expect(await db.sync({ device: { id: 'bad id!' }, events: [] })).toHaveProperty('error');
     expect(await db.sync({ device: phone, events: 'nope' })).toHaveProperty('error');
   });
@@ -126,13 +126,17 @@ describe('scores database', () => {
         attempt('run-nnnn-0001', 1, 1, 50),
       ],
     });
-    // The rude names are refused: the first run keeps its name, the second becomes a guest's.
+    // The rude names are refused: the first run keeps its name, the second is left unnamed.
     expect(r).toEqual({ accepted: 4, rejected: 2 });
-    expect((await db.boards()).runs.map((x) => x.name)).toEqual(['Hudson', 'Guest (iPhone · Safari)']);
+    expect((await db.boards()).runs.map((x) => x.name)).toEqual(['Hudson', 'Player']);
   });
 
-  it('only shows device labels and maps the game makes', async () => {
-    db = openScores(':memory:');
+  it('only stores device labels and maps the game makes', async () => {
+    const file = path.join(os.tmpdir(), `hr-labels-${process.pid}.sqlite`);
+    onTestFinished(() => {
+      for (const ext of ['', '-wal', '-shm']) rmSync(file + ext, { force: true });
+    });
+    db = openScores(file);
     const uas: Array<[string, number, boolean]> = [
       ['Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1', 5, false],
       ['Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15', 5, true],
@@ -150,12 +154,38 @@ describe('scores database', () => {
       await db.sync({ device: { id: `device-label-000${i}`, fingerprint: 'abc', label }, events: [run(id), attempt(id, 1, 1, 100 - i)] });
     }
     await db.sync({ device: { id: 'device-rude-0001', fingerprint: 'abc', label: 'Poop · Butt' }, events: [run('run-rude-0001'), attempt('run-rude-0001', 1, 1, 1)] });
-    expect((await db.boards()).runs.map((x) => x.name)).toEqual([...labels, 'Unknown device'].map((l) => `Guest (${l})`));
+    const raw = new DatabaseSync(file);
+    expect(raw.prepare('SELECT label FROM devices ORDER BY id').all().map((d) => d.label)).toEqual([...labels, 'Unknown device']);
+    raw.close();
+    // Unnamed runs are listed as Player, whatever the device.
+    expect(new Set((await db.boards()).runs.map((x) => x.name))).toEqual(new Set(['Player']));
 
     const maps = ENVIRONMENTS.map((e) => e.name);
     const r = await db.sync({ device: phone, events: [run('run-maps-0001'), ...maps.map((m, i) => attempt('run-maps-0001', i + 1, i + 1, 10, true, m)), attempt('run-maps-0001', 9, 9, 10, true, 'Poop Palace')] });
     expect(r).toEqual({ accepted: maps.length + 1, rejected: 1 });
     expect((await db.boards()).levels.map((l) => l.map)).toEqual(maps);
+  });
+
+  it('keeps plain "Player" per device, like a blank name; "Player7" is a name', async () => {
+    db = openScores(':memory:');
+    await db.sync({ device: phone, events: [run('run-plyr-0001', 'player'), attempt('run-plyr-0001', 1, 1, 100), run('run-plyr-0002'), attempt('run-plyr-0002', 1, 1, 10)] });
+    await db.sync({
+      device: laptop,
+      events: [run('run-plyr-0003'), attempt('run-plyr-0003', 1, 1, 50), { type: 'name', runId: 'run-plyr-0003', name: ' PLAYER ' }, run('run-plyr-0004', 'Player 7'), attempt('run-plyr-0004', 1, 1, 30)],
+    });
+    const { runs, career } = await db.boards();
+    expect(runs.map((x) => [x.name, x.score])).toEqual([
+      ['Player', 100],
+      ['Player', 50],
+      ['Player 7', 30],
+      ['Player', 10],
+    ]);
+    // One "Player" career per device, not everyone's runs added together.
+    expect(career.map((c) => [c.name, c.points, c.games])).toEqual([
+      ['Player', 110, 2],
+      ['Player', 50, 1],
+      ['Player 7', 30, 1],
+    ]);
   });
 
   it('hides names saved before names were checked unless they are approved', async () => {
@@ -272,7 +302,9 @@ describe('shots and the Maps board', () => {
  * comes from the player's latest run that has a level (not one just started).
  */
 function referenceBoards(raw: DatabaseSync) {
-  const q = (sql: string) => raw.prepare(sql).all() as Array<Record<string, unknown>>;
+  // Unnamed runs ("Guest (device)" in run_names) are shown as Player.
+  const q = (sql: string) =>
+    (raw.prepare(sql).all() as Array<Record<string, unknown>>).map((r) => ('name' in r && String(r.name).startsWith('Guest (') ? { ...r, name: 'Player' } : r));
   const totals = `(SELECT t.run_id, t.score, t.level, s.shots, s.hits
     FROM (SELECT run_id, SUM(score) AS score, MAX(level) AS level FROM kept_attempts GROUP BY run_id) t
     JOIN (SELECT run_id, SUM(shots) AS shots, SUM(hits) AS hits FROM attempts GROUP BY run_id) s ON s.run_id = t.run_id)`;

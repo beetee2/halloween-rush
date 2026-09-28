@@ -18,13 +18,26 @@ brother sister sis cousin baby bubba
 /** For anyone who'd rather not use their own name, or whose name isn't listed. */
 const SPOOKY = `
 pumpkin ghost ghoul goblin witch wizard vampire zombie mummy skeleton spider bat monster
-werewolf scarecrow phantom spooky boo dracula frankenstein
+werewolf scarecrow phantom spooky boo dracula frankenstein candycorn jackolantern lantern cauldron
+potion broomstick cobweb haunted specter spectre banshee gremlin imp ogre yeti bigfoot boogeyman
+trickster treat moonlight blackcat nightowl howl
+`;
+
+/** Vague names for anyone who'd rather not give theirs: "Player", "Player 123", "Hero7". */
+const GENERIC = `
+player gamer guest someone somebody anyone anybody nobody mystery secret unknown anonymous incognito
+hero superhero champ champion winner legend star superstar rookie newbie pro ace captain chief boss
+king queen prince princess knight ninja pirate robot alien astronaut explorer ranger scout agent
+detective buddy pal friend kid kiddo sport rockstar lucky happy sunny smiley silly sparky
+tiger lion bear wolf fox owl cat kitty kitten puppy bunny panda koala penguin shark dino dinosaur
+dragon unicorn phoenix rocket comet meteor thunder lightning storm shadow midnight
+cookie cupcake lollipop gumdrop jellybean marshmallow caramel
 `;
 
 const words = (s) => s.split(/\s+/).filter(Boolean);
 
 /** Every approved name, lowercase a-z. */
-export const APPROVED_NAMES = new Set([...words(NAMES), ...words(FAMILY), ...words(SPOOKY)]);
+export const APPROVED_NAMES = new Set([...words(NAMES), ...words(FAMILY), ...words(SPOOKY), ...words(GENERIC)]);
 
 /**
  * A name, then maybe a number: "Brad", "Brad2", "Brad 2019". Letters are a-z plus accented
@@ -82,4 +95,17 @@ export function nameProblem(name) {
  */
 export function approvedName(name) {
   return nameProblem(name) ? '' : String(name).normalize('NFC');
+}
+
+/** What the boards call a run nobody named. */
+export const UNNAMED = 'Player';
+
+/**
+ * The name to store for a run: `name` (already cleaned) if approved, else ''. Plain "Player" is
+ * stored as '' too, as if the box were left blank: each device keeps its own "Player" career
+ * instead of everyone who typed it sharing one. "Player2" is a name like any other.
+ */
+export function runName(name) {
+  const ok = approvedName(name);
+  return plain(ok) === plain(UNNAMED) ? '' : ok;
 }
