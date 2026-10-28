@@ -15,17 +15,31 @@ const NAME_MAX_CHARS = 16;
 const BOARD_SIZE = 10;
 export const MAX_BODY_BYTES = 1024 * 1024;
 const MAX_EVENTS = 200;
-const MAX_SHOTS = 1000;
 const ID = /^[A-Za-z0-9-]{8,64}$/;
 const FINGERPRINT = /^[a-z0-9]{1,32}$/;
-/** Target kinds and range zones are short words (e.g. "witch", "far"). */
-const WORD = /^[A-Za-z]{1,24}$/;
 // Only text the game itself makes is stored, whatever a client sends: approved names
 // (src/core/names.mjs), device labels as deviceLabel() in src/net/device.ts builds them, and the
-// maps in src/render/environments.
+// maps in src/render/environments, in the order levels go through them.
 const LABEL = /^(iPhone|iPad|Android|Chromebook|Windows|Mac|Linux|Device) · (Edge|Samsung Internet|Opera|Firefox|Chrome|Safari|Browser|Home Screen)$/;
 const UNKNOWN_DEVICE = 'Unknown device';
-const MAPS = new Set(['Haunted House', 'Graveyard', 'Spooky Forest', 'Pumpkin Patch', 'Haunted Carnival']);
+const MAPS = ['Haunted House', 'Graveyard', 'Spooky Forest', 'Pumpkin Patch', 'Haunted Carnival'];
+
+// The game's scoring rules (src/config.ts), so a level's score must add up from shots it could
+// really have fired. tests/scores-api.test.ts checks these against the config.
+/** A level lasts 60 s. */
+export const LEVEL_MS = 60_000;
+/** One pumpkin per 0.4 s, from the first moment of the level to the last. */
+export const MAX_SHOTS = 151;
+const ZONES = new Set(['near', 'medium', 'far']);
+/** Every score one hit can earn on each target: base points, range bonus, headshot. */
+export const HIT_POINTS = new Map([
+  ['frankenstein', [10, 15, 20, 30, 40]],
+  ['witch', [75, 80, 85, 150, 160, 170]],
+  ['spider', [25, 30, 35, 50, 55, 60]],
+  ['incomingPumpkin', [25, 30, 35]],
+  ['candyCorn', [100, 105, 110]],
+  ['sucker', [25, 30, 35]],
+]);
 
 const TABLES = [
   `CREATE TABLE IF NOT EXISTS devices (
@@ -247,14 +261,14 @@ function shot(v) {
   const [ms, rawYaw, rawPitch, target, zone, points, headshot] = v;
   const yaw = angle(rawYaw);
   const pitch = angle(rawPitch);
-  if (int(ms, 0, 3_600_000) === null || yaw === null || pitch === null || int(points, 0, 10_000) === null) return null;
+  if (int(ms, 0, LEVEL_MS) === null || yaw === null || pitch === null) return null;
   if (v.length === 7 && headshot !== 0 && headshot !== 1) return null;
   const head = v.length === 7 ? [headshot] : [];
   if (target === null) return zone === null && points === 0 && !headshot ? [ms, yaw, pitch, null, null, 0, ...head] : null;
-  return typeof target === 'string' && WORD.test(target) && typeof zone === 'string' && WORD.test(zone) ? [ms, yaw, pitch, target, zone, points, ...head] : null;
+  return HIT_POINTS.get(target)?.includes(points) && ZONES.has(zone) ? [ms, yaw, pitch, target, zone, points, ...head] : null;
 }
 
-/** A level's shots, or null if malformed. Games from before shot tracking send none. */
+/** A level's shots, or null if malformed or more than a level allows. Games from before shot tracking send none. */
 function shotLog(v) {
   if (v === undefined) return [];
   if (!Array.isArray(v) || v.length > MAX_SHOTS) return null;
@@ -277,7 +291,9 @@ function parseEvent(ev) {
     const level = int(e.level, 1, 1e4);
     const score = int(e.score, 0, 1e6);
     const log = shotLog(e.shots);
-    if (attempt === null || level === null || score === null || !MAPS.has(e.map) || typeof e.completed !== 'boolean' || !log) return null;
+    if (attempt === null || level === null || score === null || e.map !== MAPS[(level - 1) % MAPS.length] || typeof e.completed !== 'boolean' || !log) return null;
+    // Hits are the only way to score, so the score must be exactly the points in the shot log.
+    if (score !== log.reduce((sum, s) => sum + s[5], 0)) return null;
     return { type: 'attempt', runId, attempt, level, map: e.map, score, completed: e.completed, log };
   }
   if (e.type === 'name' && typeof e.name === 'string') {

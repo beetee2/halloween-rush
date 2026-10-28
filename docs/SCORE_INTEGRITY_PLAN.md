@@ -1,12 +1,19 @@
 # Halloween Rush — Score Integrity Plan
 
-Status: proposed (not implemented). Scope: the deployed game's online leaderboards
+Status: Phase 1 partly done, the rest proposed. Scope: the deployed game's online leaderboards
 (`worker/index.mjs` on Cloudflare D1). The same code serves the LAN host, which gets the same
 protection for free.
 
-## The problem today
+Done (October 2026, after someone resent a real level's request with a made-up score and level
+and topped every board): the server only takes a level whose score is exactly the points in its
+shot log, whose hits each score something the game awards (`HIT_POINTS` in
+`scripts/scores-core.mjs`), with at most 151 shots in 60 s, on the map that goes with its level.
+A forger now has to fabricate a consistent shot log, and the hit caps, pacing and limits below
+are still missing.
 
-`POST /api/sync` trusts whatever a device says. One command puts a fake score on every board:
+## The problem before Phase 1
+
+`POST /api/sync` trusted whatever a device said. One command put a fake score on every board:
 
 ```bash
 curl -X POST https://<game>/api/sync -H 'Content-Type: application/json' \
@@ -14,8 +21,8 @@ curl -X POST https://<game>/api/sync -H 'Content-Type: application/json' \
        {"type":"attempt","runId":"run-fake-0001","attempt":1,"level":1,"map":"Haunted House","score":999999,"completed":true}]}'
 ```
 
-The server checks only shapes and ranges (score ≤ 1,000,000, level ≤ 10,000, a device may only
-touch its own runs). Nothing ties a score to having played.
+The server checked only shapes and ranges (score ≤ 1,000,000, level ≤ 10,000, a device may only
+touch its own runs). Nothing tied a score to having played.
 
 ## Goals and limits
 

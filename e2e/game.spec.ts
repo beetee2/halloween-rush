@@ -44,6 +44,9 @@ type Boards = {
   career: Array<{ name: string; points: number; games: number; best: number; furthest: number; maps: Array<{ map: string; avg: number; plays: number }> }>;
 };
 
+/** Shots that add up to `score` (a multiple of 10), as the scores API requires: Frankensteins hit up close. */
+const hitsFor = (score: number) => Array.from({ length: score / 10 }, (_, i) => [400 * i, 0, 0, 'frankenstein', 'near', 10, 0]);
+
 // Every test starts with an empty household scores database (the e2e server keeps it in memory).
 test.beforeEach(async ({ request }) => {
   expect((await request.post('/api/test-reset')).status()).toBe(204);
@@ -769,7 +772,7 @@ test('can be added to a phone Home Screen: tags, manifest and icons are served',
 });
 
 test('phone landscape: a full scoreboard and career fit the game-over screen; Skip works by tap', async ({ browser, request }) => {
-  // Ten earlier runs by the family on another device, over two maps: 15, 25, … 105.
+  // Ten earlier runs by the family on another device, over two maps: 10, 20, … 100.
   const events: object[] = [];
   const earlierRuns: number[] = [];
   const family = ['Hudson', 'Dad', 'Mom', 'Grandmother'];
@@ -777,10 +780,10 @@ test('phone landscape: a full scoreboard and career fit the game-over screen; Sk
     const id = `seed-run-${String(i).padStart(4, '0')}`;
     events.push(
       { type: 'run', id, player: family[i % family.length] },
-      { type: 'attempt', runId: id, attempt: 1, level: 1, map: 'Haunted House', score: (i + 1) * 10, completed: true },
-      { type: 'attempt', runId: id, attempt: 2, level: 2, map: 'Graveyard', score: 5, completed: false },
+      { type: 'attempt', runId: id, attempt: 1, level: 1, map: 'Haunted House', score: (i + 1) * 10, completed: true, shots: hitsFor((i + 1) * 10) },
+      { type: 'attempt', runId: id, attempt: 2, level: 2, map: 'Graveyard', score: 0, completed: false, shots: [] },
     );
-    earlierRuns.push((i + 1) * 10 + 5);
+    earlierRuns.push((i + 1) * 10);
   }
   const seeded = await request.post('/api/sync', { data: { device: { id: 'seed-device-0001', fingerprint: 'seed', label: 'Windows · Chrome' }, events } });
   expect((await seeded.json()).accepted).toBe(30);
@@ -792,7 +795,7 @@ test('phone landscape: a full scoreboard and career fit the game-over screen; Sk
   const scored = await shootSucker(page);
   for (let i = 0; i < 3; i++) await page.evaluate(() => window.__HR__.hurt());
   await waitPhase(page, 'gameOver');
-  // A sucker (25 plus range bonus) beats last place (15). It lands below every earlier run
+  // A sucker (25 plus range bonus) beats last place (10). It lands below every earlier run
   // that scored at least as much, since a tie goes below the older entry.
   const rank = earlierRuns.filter((score) => score >= scored).length + 1;
   expect(rank).toBeLessThanOrEqual(10);
@@ -828,9 +831,12 @@ test('making a Maps or Career top 10 asks for a name too', async ({ page, reques
   const family = ['Hudson', 'Dad', 'Mom', 'Grandmother'];
   for (let i = 0; i < 10; i++) {
     const id = `seed-run-${String(i).padStart(4, '0')}`;
-    events.push({ type: 'run', id, player: family[i % family.length] }, { type: 'attempt', runId: id, attempt: 1, level: 1, map: 'Haunted House', score: (i + 1) * 100, completed: true });
+    events.push(
+      { type: 'run', id, player: family[i % family.length] },
+      { type: 'attempt', runId: id, attempt: 1, level: 1, map: 'Haunted House', score: (i + 1) * 100, completed: true, shots: hitsFor((i + 1) * 100) },
+    );
   }
-  events.push({ type: 'attempt', runId: 'seed-run-0000', attempt: 2, level: 2, map: 'Graveyard', score: 500, completed: true });
+  events.push({ type: 'attempt', runId: 'seed-run-0000', attempt: 2, level: 2, map: 'Graveyard', score: 500, completed: true, shots: hitsFor(500) });
   const seeded = await request.post('/api/sync', { data: { device: { id: 'seed-device-0001', fingerprint: 'seed', label: 'Windows · Chrome' }, events } });
   expect((await seeded.json()).accepted).toBe(21);
 

@@ -63,6 +63,9 @@ export interface D1LikeStatement {
 }
 
 export const MAX_BODY_BYTES: number;
+export const LEVEL_MS: number;
+export const MAX_SHOTS: number;
+export const HIT_POINTS: ReadonlyMap<string, readonly number[]>;
 export class HttpError extends Error {
   readonly status: number;
   constructor(status: number, message: string);

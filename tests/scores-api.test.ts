@@ -6,15 +6,23 @@ import type { AddressInfo } from 'node:net';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, describe, expect, it, onTestFinished } from 'vitest';
 import { createScoresApi, openScores, type ScoresDb } from '../scripts/scores-api.mjs';
-import { handleScores } from '../scripts/scores-core.mjs';
+import { handleScores, HIT_POINTS, LEVEL_MS, MAX_SHOTS } from '../scripts/scores-core.mjs';
+import { CONFIG } from '../src/config';
+import { pointsFor } from '../src/core/run';
 import { deviceLabel } from '../src/net/device';
 import { ENVIRONMENTS } from '../src/render/environments';
+import type { SizeClass, TargetKind } from '../src/types';
 
 const phone = { id: 'device-phone-0001', fingerprint: 'abc123', label: 'iPhone · Safari' };
 const laptop = { id: 'device-laptop-0002', fingerprint: 'def456', label: 'Linux · Chrome' };
+const MAPS = ENVIRONMENTS.map((e) => e.name);
 
 const run = (id: string, player = '') => ({ type: 'run', id, player });
-const attempt = (runId: string, n: number, level: number, score: number, completed = true, map = 'Haunted House', shots?: unknown[]) => ({
+/** Shots that add up to `score` (a multiple of 5): Frankensteins up close, the first at medium range for a 5. */
+const hitsFor = (score: number) =>
+  Array.from({ length: Math.floor(score / 10) }, (_, i) => [400 * i, 0, 0, 'frankenstein', i === 0 && score % 10 ? 'medium' : 'near', i === 0 && score % 10 ? 15 : 10, 0]);
+/** A level on its own map; without a shot log, one that adds up to the score. */
+const attempt = (runId: string, n: number, level: number, score: number, completed = true, map = MAPS[(level - 1) % MAPS.length]!, shots: unknown = hitsFor(score)) => ({
   type: 'attempt',
   runId,
   attempt: n,
@@ -22,7 +30,7 @@ const attempt = (runId: string, n: number, level: number, score: number, complet
   map,
   score,
   completed,
-  ...(shots ? { shots } : {}),
+  shots,
 });
 /** A shot log as the game sends it: `hits` far witch hits, then `misses` misses. */
 const shotLog = (hits: number, misses: number) => [
@@ -42,11 +50,11 @@ describe('scores database', () => {
     });
     expect(r).toEqual({ accepted: 5, rejected: 0 });
     const b = await db.boards();
-    expect(b.runs).toEqual([{ runId: 'run-aaaa-0001', name: 'Hudson', score: 540, level: 3, shots: 0, hits: 0 }]);
+    expect(b.runs).toEqual([{ runId: 'run-aaaa-0001', name: 'Hudson', score: 540, level: 3, shots: 104, hits: 104 }]);
     // Level bests count completed attempts, even one later replayed; a failed level never counts.
     expect(b.levels).toEqual([
       { level: 1, map: 'Haunted House', name: 'Hudson', score: 300, runId: 'run-aaaa-0001' },
-      { level: 2, map: 'Haunted House', name: 'Hudson', score: 500, runId: 'run-aaaa-0001' },
+      { level: 2, map: 'Graveyard', name: 'Hudson', score: 500, runId: 'run-aaaa-0001' },
     ]);
     expect(b.career).toHaveLength(1);
     expect(b.career[0]).toMatchObject({ name: 'Hudson', points: 540, games: 1, best: 540, furthest: 3 });
@@ -57,7 +65,7 @@ describe('scores database', () => {
     const events = [run('run-bbbb-0001'), attempt('run-bbbb-0001', 1, 1, 100)];
     await db.sync({ device: phone, events });
     await db.sync({ device: phone, events });
-    expect((await db.boards()).runs).toEqual([{ runId: 'run-bbbb-0001', name: 'Player', score: 100, level: 1, shots: 0, hits: 0 }]);
+    expect((await db.boards()).runs).toEqual([{ runId: 'run-bbbb-0001', name: 'Player', score: 100, level: 1, shots: 10, hits: 10 }]);
   });
 
   it('names a run afterwards and groups careers by name across devices', async () => {
@@ -84,7 +92,7 @@ describe('scores database', () => {
     const r = await db.sync({
       device: laptop,
       events: [
-        attempt('run-ffff-0001', 1, 1, 999), // not the laptop's run
+        attempt('run-ffff-0001', 1, 1, 990), // not the laptop's run
         { type: 'name', runId: 'run-ffff-0001', name: 'Hacker' },
         attempt('run-gggg-0001', 1, 1, 10), // run never created
         { type: 'attempt', runId: 'x', attempt: 1 },
@@ -151,19 +159,18 @@ describe('scores database', () => {
     const labels = uas.map(([ua, touch, home]) => deviceLabel(ua, touch, home));
     for (const [i, label] of labels.entries()) {
       const id = `run-labl-000${i}`;
-      await db.sync({ device: { id: `device-label-000${i}`, fingerprint: 'abc', label }, events: [run(id), attempt(id, 1, 1, 100 - i)] });
+      await db.sync({ device: { id: `device-label-000${i}`, fingerprint: 'abc', label }, events: [run(id), attempt(id, 1, 1, 100 - 5 * i)] });
     }
-    await db.sync({ device: { id: 'device-rude-0001', fingerprint: 'abc', label: 'Poop · Butt' }, events: [run('run-rude-0001'), attempt('run-rude-0001', 1, 1, 1)] });
+    await db.sync({ device: { id: 'device-rude-0001', fingerprint: 'abc', label: 'Poop · Butt' }, events: [run('run-rude-0001'), attempt('run-rude-0001', 1, 1, 10)] });
     const raw = new DatabaseSync(file);
     expect(raw.prepare('SELECT label FROM devices ORDER BY id').all().map((d) => d.label)).toEqual([...labels, 'Unknown device']);
     raw.close();
     // Unnamed runs are listed as Player, whatever the device.
     expect(new Set((await db.boards()).runs.map((x) => x.name))).toEqual(new Set(['Player']));
 
-    const maps = ENVIRONMENTS.map((e) => e.name);
-    const r = await db.sync({ device: phone, events: [run('run-maps-0001'), ...maps.map((m, i) => attempt('run-maps-0001', i + 1, i + 1, 10, true, m)), attempt('run-maps-0001', 9, 9, 10, true, 'Poop Palace')] });
-    expect(r).toEqual({ accepted: maps.length + 1, rejected: 1 });
-    expect((await db.boards()).levels.map((l) => l.map)).toEqual(maps);
+    const r = await db.sync({ device: phone, events: [run('run-maps-0001'), ...MAPS.map((m, i) => attempt('run-maps-0001', i + 1, i + 1, 10, true, m)), attempt('run-maps-0001', 9, 9, 10, true, 'Poop Palace')] });
+    expect(r).toEqual({ accepted: MAPS.length + 1, rejected: 1 });
+    expect((await db.boards()).levels.map((l) => l.map)).toEqual(MAPS);
   });
 
   it('keeps plain "Player" per device, like a blank name; "Player7" is a name', async () => {
@@ -215,19 +222,19 @@ describe('shots and the Maps board', () => {
       device: phone,
       events: [
         run('run-shot-0001', 'Hudson'),
-        attempt('run-shot-0001', 1, 1, 90, true, 'Haunted House', shotLog(2, 2)),
-        attempt('run-shot-0001', 2, 1, 45, true, 'Haunted House', shotLog(1, 3)), // Replay Level
-        attempt('run-shot-0001', 3, 2, 45, false, 'Graveyard', shotLog(1, 0)),
+        attempt('run-shot-0001', 1, 1, 170, true, 'Haunted House', shotLog(2, 2)),
+        attempt('run-shot-0001', 2, 1, 85, true, 'Haunted House', shotLog(1, 3)), // Replay Level
+        attempt('run-shot-0001', 3, 2, 85, false, 'Graveyard', shotLog(1, 0)),
       ],
     });
     const b = await db.boards();
     // The score keeps only the replay, but accuracy counts every shot of the run.
-    expect(b.runs).toEqual([{ runId: 'run-shot-0001', name: 'Hudson', score: 90, level: 2, shots: 9, hits: 4 }]);
-    expect(b.career[0]).toMatchObject({ name: 'Hudson', points: 90, shots: 9, hits: 4 });
+    expect(b.runs).toEqual([{ runId: 'run-shot-0001', name: 'Hudson', score: 170, level: 2, shots: 9, hits: 4 }]);
+    expect(b.career[0]).toMatchObject({ name: 'Hudson', points: 170, shots: 9, hits: 4 });
     // Maps list finished levels only, the replayed attempt included.
     expect(b.maps).toEqual([
-      { map: 'Haunted House', name: 'Hudson', score: 90, level: 1, runId: 'run-shot-0001', shots: 4, hits: 2 },
-      { map: 'Haunted House', name: 'Hudson', score: 45, level: 1, runId: 'run-shot-0001', shots: 4, hits: 1 },
+      { map: 'Haunted House', name: 'Hudson', score: 170, level: 1, runId: 'run-shot-0001', shots: 4, hits: 2 },
+      { map: 'Haunted House', name: 'Hudson', score: 85, level: 1, runId: 'run-shot-0001', shots: 4, hits: 1 },
     ]);
   });
 
@@ -235,34 +242,71 @@ describe('shots and the Maps board', () => {
     db = openScores(':memory:');
     const events: object[] = [run('run-maps-0001', 'Hudson'), run('run-maps-0002', 'Dad')];
     for (let i = 1; i <= 12; i++) events.push(attempt('run-maps-0001', i, 1, i * 10));
-    events.push(attempt('run-maps-0002', 1, 1, 999, false), attempt('run-maps-0002', 2, 2, 60, true, 'Graveyard'));
+    events.push(attempt('run-maps-0002', 1, 1, 990, false), attempt('run-maps-0002', 2, 2, 60, true, 'Graveyard'));
     await db.sync({ device: phone, events });
     const { maps } = await db.boards();
     expect(maps.filter((m) => m.map === 'Graveyard').map((m) => [m.name, m.score])).toEqual([['Dad', 60]]);
     const house = maps.filter((m) => m.map === 'Haunted House').map((m) => m.score);
-    expect(house).toEqual([120, 110, 100, 90, 80, 70, 60, 50, 40, 30]); // Dad's 999 was a game over
+    expect(house).toEqual([120, 110, 100, 90, 80, 70, 60, 50, 40, 30]); // Dad's 990 was a game over
   });
 
-  it('rejects malformed shot logs, but takes levels from games before shot tracking', async () => {
+  it('rejects malformed shot logs; a level without one (an older game) scores nothing', async () => {
     db = openScores(':memory:');
-    const shots = (n: number, log: unknown) => ({ ...attempt('run-shot-0002', n, n, 10), shots: log });
+    const shots = (n: number, score: number, log: unknown) => attempt('run-shot-0002', n, n, score, true, undefined, log);
     const r = await db.sync({
       device: phone,
       events: [
         run('run-shot-0002'),
-        attempt('run-shot-0002', 1, 1, 10), // no shot log: an older game
-        shots(2, [[0, 0, 0, 'witch', null, 5]]), // a hit without a range
-        shots(3, [[0, 0, 0, null, null, 5]]), // points for a miss
-        shots(4, [[0, 99, 0, null, null, 0]]), // impossible aim
-        shots(5, [[0, 0, 0, '<b>', 'far', 5]]),
-        shots(6, Array.from({ length: 1001 }, () => [0, 0, 0, null, null, 0])),
-        shots(7, 'lots'),
-        shots(8, [[0, 0, 0, null, null, 0, 1]]), // a headshot that missed
-        shots(9, [[0, 0, 0, 'witch', 'far', 170, true]]), // the flag is 0 or 1
+        { ...attempt('run-shot-0002', 1, 1, 0), shots: undefined },
+        { ...attempt('run-shot-0002', 2, 2, 10), shots: undefined },
+        shots(3, 85, [[0, 0, 0, 'witch', null, 85]]), // a hit without a range
+        shots(4, 5, [[0, 0, 0, null, null, 5]]), // points for a miss
+        shots(5, 0, [[0, 99, 0, null, null, 0]]), // impossible aim
+        shots(6, 85, [[0, 0, 0, '<b>', 'far', 85]]), // not a target
+        shots(7, 0, 'lots'),
+        shots(8, 0, [[0, 0, 0, null, null, 0, 1]]), // a headshot that missed
+        shots(9, 170, [[0, 0, 0, 'witch', 'far', 170, true]]), // the flag is 0 or 1
       ],
     });
     expect(r).toEqual({ accepted: 2, rejected: 8 });
-    expect((await db.boards()).runs[0]).toMatchObject({ score: 10, shots: 0, hits: 0 });
+    expect((await db.boards()).career[0]).toMatchObject({ games: 1, points: 0, shots: 0, hits: 0 });
+  });
+
+  it('refuses levels the game could not have scored', async () => {
+    db = openScores(':memory:');
+    const witch = (ms: number, points = 85) => [ms, 0, 0, 'witch', 'far', points, 0];
+    const level = (n: number, lvl: number, score: number, log: unknown[], map?: string) => attempt('run-fake-0001', n, lvl, score, true, map, log);
+    const r = await db.sync({
+      device: phone,
+      events: [
+        run('run-fake-0001'),
+        // A real level's shots sent again as level 30 with a made-up score, as happened on the
+        // deployed game in October 2026.
+        level(1, 30, 96767, shotLog(2, 3)),
+        level(2, 30, 170, shotLog(2, 3), 'Haunted House'), // level 30 is in the Haunted Carnival
+        level(3, 1, 10, []), // points without a hit
+        level(4, 1, 9999, [witch(0, 9999)]), // points no hit can earn
+        level(5, 1, 85, [witch(LEVEL_MS + 1)]), // a shot after the level ended
+        level(6, 1, 85 * (MAX_SHOTS + 1), Array.from({ length: MAX_SHOTS + 1 }, (_, i) => witch(390 * i))), // faster than the launcher fires
+        level(7, 30, 170, shotLog(2, 3)),
+        level(8, 1, 85 * MAX_SHOTS, Array.from({ length: MAX_SHOTS }, (_, i) => witch(400 * i))), // a full level of far witch hits
+      ],
+    });
+    expect(r).toEqual({ accepted: 3, rejected: 6 });
+    expect((await db.boards()).runs[0]).toMatchObject({ score: 170 + 85 * MAX_SHOTS, level: 30 });
+  });
+
+  it("knows the game's scoring rules (src/config.ts)", () => {
+    const kinds = Object.keys(CONFIG.defaultSize) as TargetKind[];
+    for (const kind of kinds) {
+      // Spiders sometimes come big (medium): src/sim/targets.ts.
+      const sizes: SizeClass[] = kind === 'spider' ? ['small', 'medium'] : [CONFIG.defaultSize[kind]];
+      const points = sizes.flatMap((size) => (['near', 'medium', 'far'] as const).flatMap((zone) => [pointsFor(kind, size, zone), pointsFor(kind, size, zone, true)]));
+      expect(HIT_POINTS.get(kind), kind).toEqual([...new Set(points)].sort((a, b) => a - b));
+    }
+    expect([...HIT_POINTS.keys()].sort()).toEqual(kinds.sort());
+    expect(LEVEL_MS).toBe(CONFIG.level.durationSec * 1000);
+    expect(MAX_SHOTS).toBe(Math.floor(CONFIG.level.durationSec / CONFIG.weapon.fireIntervalSec) + 1);
   });
 
   it('upgrades a database file from before shot tracking; the shots view lists every shot', async () => {
@@ -283,8 +327,8 @@ describe('shots and the Maps board', () => {
       expect((await db.boards()).runs).toEqual([{ runId: 'run-old0-0001', name: 'Hudson', score: 300, level: 1, shots: 0, hits: 0 }]);
       await db.sync({ device: phone, events: [attempt('run-old0-0001', 2, 2, 85, true, 'Graveyard', shotLog(1, 1))] });
       // A game from before the headshot flag sends six-item shots.
-      await db.sync({ device: phone, events: [attempt('run-old0-0001', 3, 3, 170, true, 'Graveyard', [[0, 0, 0, 'witch', 'far', 170]])] });
-      await db.sync({ device: phone, events: [attempt('run-old0-0001', 4, 4, 170, true, 'Graveyard', [[0, 0, 0, 'witch', 'far', 170, 1]])] });
+      await db.sync({ device: phone, events: [attempt('run-old0-0001', 3, 3, 170, true, 'Spooky Forest', [[0, 0, 0, 'witch', 'far', 170]])] });
+      await db.sync({ device: phone, events: [attempt('run-old0-0001', 4, 4, 170, true, 'Pumpkin Patch', [[0, 0, 0, 'witch', 'far', 170, 1]])] });
       expect((await db.boards()).runs[0]).toMatchObject({ score: 725, shots: 4, hits: 3 });
       db.close();
 
@@ -369,7 +413,8 @@ function randomHistory(seed: number) {
       for (let k = Math.floor(rnd() * 3); k > 0; k--) {
         r.attempt++;
         if (r.attempt > 1 && rnd() < 0.7) r.level++; // otherwise a replay of the same level
-        const ev = attempt(r.id, r.attempt, r.level, pick([0, 45, 90, 135, 300]), rnd() < 0.8, pick(['Haunted House', 'Graveyard', 'Swamp']), shotLog(Math.floor(rnd() * 3), Math.floor(rnd() * 3)));
+        const hits = Math.floor(rnd() * 4);
+        const ev = attempt(r.id, r.attempt, r.level, 85 * hits, rnd() < 0.8, rnd() < 0.1 ? 'Swamp' : undefined, shotLog(hits, Math.floor(rnd() * 3)));
         if (rnd() < 0.1) late.push({ device, event: ev });
         else events.push(ev);
       }
@@ -471,11 +516,11 @@ describe('scores HTTP API', () => {
     const req = (url: string, init?: RequestInit) => new Request(`https://halloween-rush.example${url}`, init);
     try {
       expect(await handleScores(req('/index.html'), scores)).toBeNull();
-      const body = JSON.stringify({ device: phone, events: [run('run-web0-0001', 'Hudson'), attempt('run-web0-0001', 1, 1, 45, true, 'Graveyard', shotLog(1, 2))] });
+      const body = JSON.stringify({ device: phone, events: [run('run-web0-0001', 'Hudson'), attempt('run-web0-0001', 1, 2, 85, true, 'Graveyard', shotLog(1, 2))] });
       const res = (await handleScores(req('/api/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }), scores))!;
       expect(res.status).toBe(200);
       expect(res.headers.get('cache-control')).toBe('no-store');
-      expect((await res.json()).boards.maps).toEqual([{ map: 'Graveyard', name: 'Hudson', score: 45, level: 1, runId: 'run-web0-0001', shots: 3, hits: 1 }]);
+      expect((await res.json()).boards.maps).toEqual([{ map: 'Graveyard', name: 'Hudson', score: 85, level: 2, runId: 'run-web0-0001', shots: 3, hits: 1 }]);
       expect((await handleScores(req('/api/sync', { method: 'POST', body: '{}' }), scores))!.status).toBe(415);
       expect((await handleScores(req('/api/test-reset', { method: 'POST' }), scores))!.status).toBe(404);
     } finally {
